@@ -11,3 +11,4 @@ st.bar_chart(view)
 
 sview = pd.Series(view)
 sview
+
