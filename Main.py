@@ -7,9 +7,9 @@ p1 = st.Page("pages/1 Initiatives.py", title = "Initiatives")
 p2 = st.Page("pages/2 Sprint Planning.py", title = "Sprint Planning")
 p3 = st.Page("pages/3 Sprint Review.py", title = "Sprint Review")
 # p4 = st.Page("pages/5 Account Setting.py", title = "Account Setting")
-p4 = st.Page("pages/6 Organization.py", title = "Organization")
+#p4 = st.Page("pages/6 Organization.py", title = "Organization")
 
-pg = st.navigation([p1, p2, p3, p4 ])
+pg = st.navigation([p1, p2, p3 ])
 
 pg.run()
 
