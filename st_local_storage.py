@@ -76,3 +76,9 @@ class StLocalStorage:
             self.__setitem__(key, value)
         except:
             return None
+
+    def remove(self, key: str) -> None:
+        try:
+            self.__delitem__(key)
+        except:
+            return None

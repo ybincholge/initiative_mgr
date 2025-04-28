@@ -1,44 +1,62 @@
 import json
-from account_util import *
+from utils.account_util import *
+from utils.tag_const import *
 import streamlit as st
-import time
 
-account = get_account()
+class SideBar:
+    def __init__(self, accUtil):
+        self.accUtil = accUtil
+        self.account = accUtil.account
 
-if account is not None:
-    user_id = account['user_id']
-    password = account['password']
-    role = account['role']
-else:
-    user_id = ''
-    password = ''
-    role = '개발자'
-
-if not user_id or not password:
-    # ID 입력 필드
-    st.markdown('## Login')
-    st.markdown('###')
+        if "jira" in st.session_state:
+            self.jira = st.session_state['jira']
+            self.username = self.jira.user(self.jira.current_user()).displayName
     
-    user_id = st.text_input('### :male-office-worker: Enter your AD account', key=user_id, value=user_id, max_chars=20)
+    def make_slidebar(self):
+        with st.sidebar:
+            c1, c2 = st.columns([2, 1])
+            if self.account and self.account['user_id'] and self.account['role']:
+                st.session_state.logged_in = True
+                with c1:
+                    st.markdown(slidebar_txt, unsafe_allow_html=True)
+                    st.markdown("<p class='slidebar-text'>Hi, "+self.username+" </p>", unsafe_allow_html=True)
+                with c2:
+                    st.button("Delete", on_click=self.handle_logout)
+            
 
-    # Password 입력 필드 (mask 처리)
-    password = st.text_input("### :key: Password", placeholder="비밀번호는 서버에 저장되지 않고 로컬 브라우저에 암호화하여 저장합니다.", type="password", key=password, value=password, max_chars=20)
+    def init(self):
+        self.make_slidebar()
 
-    # Role 선택 드롭다운
-    role_options = ["실장", "팀장", "파트장", "개발자"]
-    role = st.selectbox(":hammer_and_wrench: Role", role_options, index=role_options.index(role))
+    def handle_logout(self):
+        self.account = self.accUtil.logout()
+        st.session_state.logged_in = False
 
-    # Save button
-    check_button = st.button("Check")
-    # If the save button is clicked
-    if check_button:
-        try:
-            jira = login(user_id, password)
-        except:
-            st.badge("Login authentication failure")
-        else:        
-            st.session_state['account'] = set_account(st, {'user_id': user_id, "password": password, "role":role})
-            time.sleep(5)
-            st.success("Login successful")
-        
-        
+ms_page = st.Page("page/Milestone_Management.py")
+sd_page = st.Page("page/Structure_Display.py")
+sp_page = st.Page("page/Sprint_Planning.py")
+sr_page = st.Page("page/Sprint_Review.py", title = "  Sprint Review")
+so_page = st.Page("page/Organization.py")
+ss_page = st.Page("page/Sprint.py")
+sl_page = st.Page("page/Labels.py")
+ac_page = st.Page("page/Account.py")
+
+st.set_page_config(page_title="Initiative Management", page_icon = "📔" ,layout="wide")
+sidebar = SideBar(AccountUtil())
+sidebar.init()
+
+if "logged_in" in st.session_state and st.session_state.logged_in:
+    pg = st.navigation(
+        {
+            "📔Initiative": [ms_page, sd_page],
+            "📆Sprint": [sp_page, sr_page],
+            "⚙️Settings": [so_page, ss_page, sl_page]
+        }
+    )
+    pg.run()
+else:
+    pg = st.navigation(
+        {
+            "Account Setting": [st.Page("page/Account.py")]
+        }
+    )
+
