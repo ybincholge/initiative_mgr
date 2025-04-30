@@ -132,7 +132,4 @@ class AccountUtil:
         jira = JIRA(server='http://hlm.lge.com/issue', basic_auth=(jid, pwd))
         return jira
 
-    def i(self):
-        return self.login("ybin.cho", "skdjskdj1!")
-
 
