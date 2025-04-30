@@ -6,16 +6,20 @@ import streamlit as st
 import base64  # string 데이터를 encode / decode 하기 위한 라이브러리
 import rsa  # rsa 모듈을 이용해서 메세지를 암호화 할 것
 
-
 class AccountUtil:
     def __init__(self):
         self.sls = StLocalStorage()
-        self.account = self.chk_n_display_login()
+        self.account = {}
+
 
     def chk_n_display_login(self): 
         account = self.get_account()
+        # if not "logged_in" in st.session_state or not st.session_state['logged_in']:
+        #     with st.spinner("Loading ... ⏳"):
+        #         time.sleep(1)
 
         if account:
+            self.account = account
             user_id = account['user_id']
             password = account['password']
             role = account['role']
@@ -24,7 +28,10 @@ class AccountUtil:
             except:
                 None
             else:
-                account = {'user_id': user_id, "role": role}
+                st.session_state.logged_in = True
+                username = jira.user(jira.current_user()).displayName
+                account = {'user_id': user_id, 'username': username, "role": role}
+                st.session_state['user_id'] = user_id
                 st.session_state['account'] = account
                 st.session_state['jira'] = jira
                 return account
@@ -35,32 +42,40 @@ class AccountUtil:
             role = '개발자'
 
             # ID 입력 필드
-            st.header('Account Setting', divider = "gray")
+            st.header('Account Setting')
+            st.markdown("")
             
-            user_id = st.text_input('### :male-office-worker: User ID', placeholder='JIRA 로그인을 위한 AD계정 아이디', key=user_id, value=user_id, max_chars=20)
+            col1, col2 = st.columns([2,3])
+            with col1:
+                with st.container(border=True):
+                    user_id = st.text_input('### :male-office-worker: User ID', placeholder='JIRA 로그인을 위한 AD계정 아이디', max_chars=20)
 
-            # Password 입력 필드 (mask 처리)
-            password = st.text_input("### :key: Password", placeholder="비밀번호는 서버에 저장되지 않고 로컬 브라우저에만 암호화하여 저장합니다.", type="password", key=password, value=password, max_chars=20)
+                    # Password 입력 필드 (mask 처리)
+                    password = st.text_input("### :key: Password", placeholder="비밀번호는 서버에 저장되지 않고 로컬 브라우저에만 암호화하여 저장합니다.", type="password", key=password, value=password, max_chars=20)
 
-            # Role 선택 드롭다운
-            role_options = ["실장", "팀장", "파트장", "개발자"]
-            role = st.selectbox(":hammer_and_wrench: View", role_options, index=role_options.index(role))
+                    # Role 선택 드롭다운
+                    role_options = ["실장", "팀장", "파트장", "개발자"]
+                    role = st.selectbox(":hammer_and_wrench: Initial View", role_options, index=role_options.index(role))
 
-            # Save button
-            save = st.button("Save")
-            # If the save button is clicked
-            if save:
-                try:
-                    jira = self.login(user_id, password)
-                except:
-                    st.badge("Login authentication failure. Please check again.", icon=":material/warning:", color = 'red')
-                else:
-                    account = {'user_id': user_id, "role":role}
-                    self.set_account({'user_id': user_id, "password": password, "role":role})
-                    st.success("Login successful")
-                    st.session_state['account'] = account
-                    st.session_state['jira'] = jira
-                    return account
+                    # Save button
+                    save = st.button("Save")
+                    # If the save button is clicked
+                    if save:
+                        try:
+                            jira = self.login(user_id, password)
+                        except:
+                            st.badge("Login authentication failure. Please check again.", icon=":material/warning:", color = 'red')
+                        else:
+                            st.session_state.logged_in = True
+                            username = jira.user(jira.current_user()).displayName
+                            st.session_state['user_id'] = user_id
+
+                            account = {'user_id': user_id, 'username': username, "role":role}
+                            self.set_account({'user_id': user_id, "password": password, "role":role})
+                            st.success("Login successful")
+                            st.session_state['account'] = account
+                            st.session_state['jira'] = jira
+                            return account
 
 
     def handle_logout(self):
@@ -83,7 +98,6 @@ class AccountUtil:
     def get_account(self):
         account = self.sls.get("account")
         if account:
-            print("account: "+str(account))
             pwd_byte = base64.b64decode(account['password'])
             private_key_bytes = open('private.pem', 'rb').read()
             private_key = rsa.PrivateKey.load_pkcs1(keyfile=private_key_bytes)

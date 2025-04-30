@@ -1,7 +1,7 @@
 slidebar_txt = """
     <style>
     .slidebar-text {
-        text-align: vertical-left;
+        text-align: left;
         line-height: 0.1;
     }
     </style>
