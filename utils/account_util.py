@@ -103,18 +103,6 @@ class AccountUtil:
             private_key = rsa.PrivateKey.load_pkcs1(keyfile=private_key_bytes)
             account['password'] = rsa.decrypt(pwd_byte, private_key).decode('utf-8')
         return account
-        # if account is None:
-        #     return None
-        # user_id_bytes = base64.b64decode(account['user_id'])
-        # password_bytes = base64.b64decode(account['password'])
-        # role = account['role']
-        # private_key_bytes = open('private.pem', 'rb').read()
-        # private_key = rsa.PrivateKey.load_pkcs1(keyfile=private_key_bytes)
-        # user_id = rsa.decrypt(user_id_bytes, private_key).decode('utf-8')
-        # password = rsa.decrypt(password_bytes, private_key).decode('utf-8')
-        # role = account['role']
-        # account = {'user_id': user_id, 'password': password, 'role': role}
-        # return account
 
     def set_account(self, account):
         public_key_bytes = open('public.pem', 'rb').read() 
@@ -132,4 +120,24 @@ class AccountUtil:
         jira = JIRA(server='http://hlm.lge.com/issue', basic_auth=(jid, pwd))
         return jira
 
+
+    def get_username_jira(self, acc_id):
+        error = False
+        try:
+            jira = st.session_state['jira']
+            username = jira.user(acc_id).displayName
+        except:
+            error = True
+
+        if error:
+            # try again
+            try:
+                account = self.account
+                if account:
+                    j = self.login(account['user_id'], account['password'])
+                    username = j.user(acc_id).displayName
+            except:
+                return ""
+
+        return username
 

@@ -83,7 +83,6 @@ class SideBar:
         self.account = self.accUtil.logout()
         st.session_state.logged_in = False
 
-
     def add_menu(self):
         ms_page = st.Page("page/Milestone_Management.py")
         sd_page = st.Page("page/Structure_Display.py")
