@@ -3,30 +3,41 @@ from pymongo import MongoClient
 from utils.account_util import *
 from utils.db_util import *
 
+
 class OrganizationSetting:
     def __init__(self):
-        if "jira" in st.session_state:
-            self.jira = st.session_state['jira']
+        self.db = None
 
-        if 'db' in st.session_state and st.session_state['db']:
-            self.db = st.session_state['db']
-        else:
+        # if "db_org" in st.session_state and st.session_state['db_org']:
+        #     self.db = st.session_state["db_org"]
+        # else:
+        #     self.db = DBUtil('org')
+        #     st.session_state["db_org"] = self.db
+        self.orgs = None
+        self.sils = None
+        self.teams = None
+        self.parts = None
+        self.org_names_all = None
+
+    def initDB(self):
+        if not self.db:
             self.db = DBUtil('org')
-            st.session_state['db'] = self.db
 
         self.orgs = self.db.read()
         self.sils = make_list_by_orgtype(self.orgs, '실')
         self.teams = make_list_by_orgtype(self.orgs, '팀')
         self.parts = make_list_by_orgtype(self.orgs, '파트')
+        self.org_names_all = ['실 🔻'] + make_list_by_field(self.sils, 'name') + ['팀 🔻'] + make_list_by_field(self.teams, 'name') + ['파트 🔻'] + make_list_by_field(self.parts, 'name')
+
 
     def renderPage(self):
         st.title("Organization Setting")
 
-        selected_org_name = ""
-
-        operation = st.radio("🔧 Select Operation", ["Query & Edit", "Add new"])
         st.markdown("")
+        operation = st.radio("🔧 Select Operation", ["Query & Edit", "Add new"], index=None)
 
+        if not operation:
+            return
         if operation == "Add new":
             self.add_new = True
         else:
@@ -34,9 +45,13 @@ class OrganizationSetting:
 
         c1, c2, c3 = st.columns([1,1,1])
 
-        org_names_all = ['실 🔻'] + make_list_by_field(self.sils, 'name') + ['팀 🔻'] + make_list_by_field(self.teams, 'name') + ['파트 🔻'] + make_list_by_field(self.parts, 'name')
+        self.initDB()
+        orgs = self.orgs
+        org_names_all = self.org_names_all
 
         selected_org = None
+        selected_org_name = ""
+
         with c1:
             with st.container(border=True):
                 if self.add_new:
@@ -48,7 +63,7 @@ class OrganizationSetting:
                 
                 else:
                     selected_org_name = st.selectbox("🔍 Select organization to edit", org_names_all, index=None, placeholder="Click or input a name of organization")
-                    selects = [selected_orgs for selected_orgs in self.orgs if selected_orgs['name'] == selected_org_name]
+                    selects = [selected_orgs for selected_orgs in orgs if selected_orgs['name'] == selected_org_name]
                     if len(selects)>0:
                         selected_org = selects[0]
                         new_org = {
@@ -63,7 +78,7 @@ class OrganizationSetting:
         with c2:
             with st.container(border=True):
                 subkey, new_org[subkey] = self.display_subpart(new_org['type'], selected_org)
-            
+        
         if new_org and subkey in new_org and len(new_org[subkey]) > 0:
             for idx in range(len(new_org[subkey])-1, -1, -1):
                 if not new_org[subkey][idx]:
@@ -85,6 +100,8 @@ class OrganizationSetting:
                 msg = "DB update"
         if num:
             st.success(msg + " successful!")
+
+        self.db.close()
 
     def display_subpart(self, orgtype, org):
         if orgtype == '실':

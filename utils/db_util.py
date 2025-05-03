@@ -39,10 +39,12 @@ class DBUtil:
             result = self.collection.insert_one(data)
             return result.inserted_id
 
+    def close(self):
+        self.client.close()
 
+## List Utils ##
 def make_list_by_orgtype(list_org, filtered_org_type):
     return [k for k in list_org if 'type' in k and k['type']==filtered_org_type]
-
 
 def make_list_by_field(s_list, field_name, add_first=None, add_last=None):
         result = [e[field_name] for e in s_list if field_name in e and e[field_name]]
@@ -51,3 +53,11 @@ def make_list_by_field(s_list, field_name, add_first=None, add_last=None):
         if add_first:
             return result.insert(0, add_first)
         return result
+
+def make_list_by_field_condition(list_org, field_name, value, cond_type):
+    if cond_type == "equals":
+        return [k for k in list_org if field_name in k and k[field_name]==value]
+    elif cond_type == "startswith":
+        return [k for k in list_org if field_name in k and k[field_name] and k[field_name].startswith(value)]
+    elif cond_type == "endswith":
+        return [k for k in list_org if field_name in k and k[field_name] and k[field_name].endswith(value)]

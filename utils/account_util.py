@@ -10,6 +10,7 @@ class AccountUtil:
     def __init__(self):
         self.sls = StLocalStorage()
         self.account = {}
+        # self.org_setting = orgsettings
 
 
     def chk_n_display_login(self): 
@@ -22,24 +23,24 @@ class AccountUtil:
             self.account = account
             user_id = account['user_id']
             password = account['password']
-            role = account['role']
+            # role = account['role']
             try:
                 jira = self.login(user_id, password)
             except:
-                None
+                self.logout()
+                return
             else:
                 st.session_state.logged_in = True
-                username = jira.user(jira.current_user()).displayName
-                account = {'user_id': user_id, 'username': username, "role": role}
+                self.account["username"] = jira.user(jira.current_user()).displayName
                 st.session_state['user_id'] = user_id
-                st.session_state['account'] = account
+                st.session_state['account'] = self.account
                 st.session_state['jira'] = jira
-                return account
+                return self.account
 
         else:
             user_id = ''
             password = ''
-            role = '개발자'
+            # role = '개발자'
 
             # ID 입력 필드
             st.header('Account Setting')
@@ -51,11 +52,10 @@ class AccountUtil:
                     user_id = st.text_input('### :male-office-worker: User ID', placeholder='JIRA 로그인을 위한 AD계정 아이디', max_chars=20)
 
                     # Password 입력 필드 (mask 처리)
-                    password = st.text_input("### :key: Password", placeholder="비밀번호는 서버에 저장되지 않고 로컬 브라우저에만 암호화하여 저장합니다.", type="password", key=password, value=password, max_chars=20)
+                    password = st.text_input("### :key: Password", placeholder="비밀번호는 서버에 전송되지 않고 브라우저의 로컬스토리지에 암호화하여 저장합니다.", type="password", key=password, value=password, max_chars=20)
 
-                    # Role 선택 드롭다운
-                    role_options = ["실장", "팀장", "파트장", "개발자"]
-                    role = st.selectbox(":hammer_and_wrench: Initial View", role_options, index=role_options.index(role))
+                    # role_options = ["실장", "팀장", "파트장", "개발자"]
+                    # role = st.selectbox(":hammer_and_wrench: Initial View", role_options, index=role_options.index(role))
 
                     # Save button
                     save = st.button("Save")
@@ -69,9 +69,8 @@ class AccountUtil:
                             st.session_state.logged_in = True
                             username = jira.user(jira.current_user()).displayName
                             st.session_state['user_id'] = user_id
-
-                            account = {'user_id': user_id, 'username': username, "role":role}
-                            self.set_account({'user_id': user_id, "password": password, "role":role})
+                            account = {'user_id': user_id, "password": password, 'username': username, "org": {"sil": [], "team": [], "part":[]}}
+                            self.set_account(account)
                             st.success("Login successful")
                             st.session_state['account'] = account
                             st.session_state['jira'] = jira
