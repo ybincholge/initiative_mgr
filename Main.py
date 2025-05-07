@@ -8,7 +8,10 @@ from streamlit_theme import st_theme
 from page.Sprint import *
 from page.Organization import *
 
-st.set_page_config(page_title="SWIM", page_icon = "📔" ,layout="wide")
+set_page_config = False
+if not set_page_config:
+    st.set_page_config(page_title="SWIM", page_icon = "📔" ,layout="wide")
+    set_page_config = True
 
 class SideBar:
     def __init__(self, accUtil, sprintSetting, orgsetting):
@@ -20,6 +23,9 @@ class SideBar:
         self.sprint_names = None
         self.active_sprint = ""
         self.org_setting = orgsetting
+        self.jql_info={'sprint':{}, 'team': {}, 'part':{} }
+        st.sidebar.data = {"account": self.account, "jql": self.jql_info}
+        st.sidebar.settings = {"org": orgsetting, "sprint": sprintSetting}
 
     def add_logo_sidebar(self):
         with st.sidebar:
@@ -70,18 +76,15 @@ class SideBar:
             self.sprints = self.sprint_setting.sprints
             self.sprint_names = self.sprint_setting.sprint_names
             self.active_sprint = self.sprint_setting.active_sprint
-            self.sprint = st.selectbox('Sprint', self.sprint_names, index = self.sprint_names.index(self.active_sprint['name']))
+            self.sprint_name = st.selectbox('Sprint', self.sprint_names, index = self.sprint_names.index(self.active_sprint['name']))
+            for sp in self.sprints:
+                if sp['name'] == self.sprint_name:
+                    self.jql_info['sprint'] = sp
+                    self.jql_info['sprint_start'], self.jql_info['sprint_end'] = self.sprint_setting.getStartEndDateStr(self.jql_info['sprint'])
             self.sprint_setting.db.close()
 
             # Organization part
-            c1, c2 = st.columns([2, 1])
-            with c1:
-                st.markdown("")
-                st.markdown("Organization")
-            with c2:
-                st.markdown("")
-
-
+            st.write("Organization")
             self.org_setting.initDB()
             # st.multiselect("실", make_list_by_field(self.org_setting.sils, "name",)
             # self.accUtil.sls.set("org_sil", , default=self.accUtil.sls.get("org_sil")))
@@ -91,15 +94,37 @@ class SideBar:
                     selected_ss = st.multiselect("실", make_list_by_field(self.org_setting.sils, "name"), default=self.account["org"]["sil"])
                     selected_ts = st.multiselect("팀", make_list_by_field(self.org_setting.teams, "name"), default=self.account["org"]["team"])
                     selected_ps = st.multiselect("파트", make_list_by_field(self.org_setting.parts, "name"), default=self.account["org"]["part"])
-                    if self.is_valid_account() and (selected_ss or selected_ts or selected_ps) and st.button("Save"):
-                        self.account["org"]={"sil": selected_ss, "team": selected_ts, "part": selected_ps}
-                        self.accUtil.set_account(self.account)
 
+                    if self.is_valid_account() and (selected_ss or selected_ts or selected_ps):
+                        self.account["org"]={"sil": selected_ss, "team": selected_ts, "part": selected_ps}
+                        st.session_state["account"] = self.account
+                        st.sidebar.data["account"] = self.account
+                        if st.button("Save"):
+                            self.accUtil.set_account(self.account)
+                        print("Main: set account with org: "+str(self.account["org"]))
+            if not self.account['org']:
+                self.account["org"] = {"sil": [], "team": [], "part":[]}
+
+            self.saveOrgInfo()
             self.org_setting.db.close()
 
-            # if len(selected_ps)>0:
-            #     self.accUtil.set
-
+    def saveOrgInfo(self):
+        if self.account['org']['part']:
+            for part_name in self.account['org']['part']:
+                print("DataObj call getJqlConditionByOrg with  "+part_name)
+                team, part = self.org_setting.getJqlConditionByOrg(part_name)
+                self.jql_info['team'].update(team)
+                self.jql_info['part'].update(part)
+        elif self.account['org']['team']:
+            for team_name in self.account['org']['team']:
+                team, part = self.org_setting.getJqlConditionByOrg(team_name)
+                self.jql_info['team'].update(team)
+                self.jql_info['part'].update(part)
+        elif self.account['org']['sil']:
+            for sil_name in self.account['org']['sil']:
+                team, part = self.org_setting.getJqlConditionByOrg(sil_name)
+                self.jql_info['team'].update(team)
+                self.jql_info['part'].update(part)
 
     def get_logo_path(self):
         try: 
@@ -143,13 +168,15 @@ class SideBar:
         ss_page = st.Page("page/Sprint.py", title = "⚙️ Sprint Setting")
         sl_page = st.Page("page/Labels.py")
         ac_page = st.Page("page/Account.py")
+        jr_page = st.Page("page/Jira_Reference.py")
 
         if "logged_in" in st.session_state and st.session_state.logged_in:
             pg = st.navigation(
                 {
                     "For Leader & Initiative Owner": [im_page, ms_page],
                     "For Team & Part": [sp_page, sr_page],
-                    "Settings": [so_page, ss_page,] # [s_page]
+                    "Settings": [so_page, ss_page,], # [s_page]
+                    "Help": [jr_page]
                 }
                 # [im_page, ms_page, sp_page, sr_page, s_page]
             )
@@ -166,7 +193,6 @@ org_setting = OrganizationSetting()
 sprint_setting = SprintSetting()
 accountUtil = AccountUtil()
 sidebar = SideBar(accountUtil, sprint_setting, org_setting)
-
 sidebar.init()
 sidebar.add_menu()
 # sidebar.add_logo_sidebar()

@@ -81,7 +81,7 @@ class AccountUtil:
         self.account = self.accUtil.logout()
 
     def login(self, user_id, password):
-        options = {'server': 'https://your-jira-server.com'}
+        options = {'server': 'http://hlm.lge.com/issue'}
         jira = JIRA(options, basic_auth=(user_id, password))
         return jira
 

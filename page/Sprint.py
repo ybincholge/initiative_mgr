@@ -12,12 +12,12 @@ class SprintSetting:
     def initDB(self):
         self.db = DBUtil('sprint')
         self.sprints_all = self.db.read({})
-        self.update_sprints()
+        self.updateSprintInfo()
 
-    def update_sprints(self):
+    def updateSprintInfo(self):
         self.sprints = make_list_by_field_condition(self.sprints_all, "name", str(self.year), "startswith")
         self.sprint_names = make_list_by_field(self.sprints, "name")
-        self.active_sprint = self.current_sprint = self.find_active_sprint()
+        self.active_sprint = self.current_sprint = self.findActiveSprint()
 
     def renderPage(self):
         st.title("Sprint Setting")
@@ -28,7 +28,7 @@ class SprintSetting:
             years = [self.year-1, self.year, self.year+1]
             self.year = st.selectbox("연도 선택", [self.year-1, self.year, self.year+1], index=years.index(self.now.year))
         with c2:
-            self.update_sprints()
+            self.updateSprintInfo()
             selected_sprint_name = st.selectbox("Select a sprint", self.sprint_names, index=self.sprint_names.index(self.active_sprint['name']) if self.active_sprint else (len(self.sprint_names)-1 if self.year < self.now.year else 0))
 
         c1, c2 = st.columns([3, 5])
@@ -61,7 +61,7 @@ class SprintSetting:
         st.write("{year}.Sprint.Collab".format(year=str(self.year)), self.collabs[str(self.year)])
 
     # 오늘 날짜로 active sprint를 찾음
-    def find_active_sprint(self):
+    def findActiveSprint(self):
         now = dt.now()
         today = dt.now().strftime('%Y/%m/%d')
         for date in self.sprints:
@@ -79,6 +79,20 @@ class SprintSetting:
                 return date
         return None
 
+    def getStartEndDateStr(self, sprint):
+        sprint_name = sprint['name']
+        date_str = str(sprint_name).split("(")[1].split(")")[0]
+        from_str = str(self.year)+"/"+date_str.split("-")[0]
+        to_str = str(self.year)+"/"+date_str.split("-")[1]
+        from_date = dt.strptime(from_str, '%Y/%m/%d')
+        to_date = dt.strptime(to_str, '%Y/%m/%d')
+        if from_date>to_date:
+            from_str = str(self.year-1)+"/"+date_str.split("-")[0]
+            from_date = dt.strptime(from_str, '%Y/%m/%d')
+        
+        return from_date.strftime('%Y-%m-%d'), to_date.strftime('%Y-%m-%d')
+        
+        
 
 sprint_setting = SprintSetting()
 sprint_setting.renderPage()

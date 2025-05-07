@@ -77,7 +77,7 @@ class OrganizationSetting:
                     new_org['group'] = st.text_input('JIRA 팀그룹', value = selected_org['group'] if selected_org else None, placeholder="JIRA > Issues > Search for issues > argument of membersOf function")
         with c2:
             with st.container(border=True):
-                subkey, new_org[subkey] = self.display_subpart(new_org['type'], selected_org)
+                subkey, new_org[subkey] = self.displaySubpart(new_org['type'], selected_org)
         
         if new_org and subkey in new_org and len(new_org[subkey]) > 0:
             for idx in range(len(new_org[subkey])-1, -1, -1):
@@ -103,7 +103,7 @@ class OrganizationSetting:
 
         self.db.close()
 
-    def display_subpart(self, orgtype, org):
+    def displaySubpart(self, orgtype, org):
         if orgtype == '실':
             suborg_guide = "팀 이름 (공백까지 일치 필요)"
             subkey = 'suborg'
@@ -123,7 +123,59 @@ class OrganizationSetting:
             val = len(org[subkey])
         n_subpart = st.number_input(label, value = val, min_value=min, max_value=25, step=1)
         return subkey, [st.text_input("subpart ", key = 'subpart{i}'.format(i=idx), label_visibility = "collapsed", value = org[subkey][idx] if (org and subkey in org and idx<len(org[subkey])) else None, placeholder=suborg_guide) for idx in range(n_subpart)]
+
+    def getOrgFromName(self, name, src_list=None):
+        if src_list:
+            orgs = src_list
+        else:
+            orgs = self.orgs
+        for org in orgs:
+            if org['name'] == name:
+                return org
+        return None
+
+    def getJqlConditionByOrg(self, org_str):
+        if not org_str:
+            return ""
+
+        org = self.getOrgFromName(org_str)
+        result_teams = {}
+        result_parts = {}
+        org_type = org['type']
         
+        def add_part(part_name):
+            part = self.getOrgFromName(part_name, self.parts)
+            print("part_org "+str(part))
+            result_parts[part_name] = {"leader": part['leader'], 'members': []+part['members']}
+
+        def add_team(team_name):
+            team = self.getOrgFromName(team_name, self.teams)
+            result_teams[team_name] = {"leader": team['leader']}
+            if team and 'group' in team and team['group']:
+                result_teams[team_name]['group'] = team['group']
+                if team and 'suborg' in team and len(team['suborg'])>0:
+                    for part_name in team['suborg']:
+                        if part_name not in result_parts:
+                            add_part(part_name)
+                else:
+                    st.write('need to check ', team)
+            else:
+                st.write('need to check ', team)
+
+        if org_type == "실":
+            print(org_str+" 실 case")
+            for team_name in org['suborg']:
+                add_team(team_name)
+
+        if org_type == '팀':
+            print(org_str+" 팀 case")
+            add_team(org_str)
+
+        if org_type == '파트':
+            print(org_str+" 파트 case")
+            add_part(org_str)
+
+        return result_teams, result_parts
 
 org_setting = OrganizationSetting()
 org_setting.renderPage()
