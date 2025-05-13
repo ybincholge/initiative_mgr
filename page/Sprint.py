@@ -23,7 +23,7 @@ class SprintSetting:
         st.title("Sprint Setting")
         st.markdown("")
         self.initDB()
-        c1, c2, c3 = st.columns([1, 2, 5])
+        c1, c2, c3 = st.columns([1, 2, 2])
         with c1:
             years = [self.year-1, self.year, self.year+1]
             self.year = st.selectbox("연도 선택", [self.year-1, self.year, self.year+1], index=years.index(self.now.year))
@@ -31,7 +31,7 @@ class SprintSetting:
             self.updateSprintInfo()
             selected_sprint_name = st.selectbox("Select a sprint", self.sprint_names, index=self.sprint_names.index(self.active_sprint['name']) if self.active_sprint else (len(self.sprint_names)-1 if self.year < self.now.year else 0))
 
-        c1, c2 = st.columns([3, 5])
+        c1, c2 = st.columns([3, 2])
         with c1:
             with st.container(border=True):
                 st.markdown("#### Edit Sprint")

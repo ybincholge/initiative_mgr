@@ -8,10 +8,7 @@ from streamlit_theme import st_theme
 from page.Sprint import *
 from page.Organization import *
 
-set_page_config = False
-if not set_page_config:
-    st.set_page_config(page_title="SWIM", page_icon = "📔" ,layout="wide")
-    set_page_config = True
+st.set_page_config(page_title="SWIM", page_icon = "📔" ,layout="wide")
 
 class SideBar:
     def __init__(self, accUtil, sprintSetting, orgsetting):
@@ -26,6 +23,7 @@ class SideBar:
         self.jql_info={'sprint':{}, 'team': {}, 'part':{} }
         st.sidebar.data = {"account": self.account, "jql": self.jql_info}
         st.sidebar.settings = {"org": orgsetting, "sprint": sprintSetting}
+        
 
     def add_logo_sidebar(self):
         with st.sidebar:
@@ -69,7 +67,7 @@ class SideBar:
                     st.markdown(slidebar_txt, unsafe_allow_html=True)
                     st.markdown("<p class='slidebar-text'> Hello,&ensp;"+self.username+" </p>", unsafe_allow_html=True)
                 with c2:
-                    st.button("Delete", on_click=self.handle_logout, use_container_width=True)
+                    st.button("Log out", on_click=self.handle_logout, use_container_width=True)
 
             # Sprint
             self.sprint_setting.initDB()

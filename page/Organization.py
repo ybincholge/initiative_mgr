@@ -43,7 +43,7 @@ class OrganizationSetting:
         else:
             self.add_new = False
 
-        c1, c2, c3 = st.columns([1,1,1])
+        c1, c2, c3 = st.columns([1,1,0.5])
 
         self.initDB()
         orgs = self.orgs
