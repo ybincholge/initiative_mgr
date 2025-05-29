@@ -100,7 +100,7 @@ class SideBar:
                         if st.button("Save"):
                             self.accUtil.set_account(self.account)
                         print("Main: set account with org: "+str(self.account["org"]))
-            if not self.account['org']:
+            if 'org' not in self.account or not self.account['org']:
                 self.account["org"] = {"sil": [], "team": [], "part":[]}
 
             self.saveOrgInfo()

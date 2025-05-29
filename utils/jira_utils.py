@@ -20,8 +20,26 @@ def getChildIssues(epic, stories, issuetype = 'All'):
     
     return child_result        
 
+def getField(i, field):
+    if field == "Epic Link":
+        return i.raw['fields']['customfield_10434']
+    elif field == "Categorization":
+        result = i.raw['fields']['customfield_20769']
+        if result and result['value']:
+            return result['value']
+        return "None"
+    elif field == "Story Points":
+        return i.raw['fields']['customfield_10002']
+    elif field == "Story Points Info":
+        storyPointsInfo = i.raw['fields']['customfield_15710']
+        try:
+            return float(storyPointsInfo.split(" (Resolved")[0].split("Total : ")[1].split(" / ")[0])
+        except Exception as e:
+            return 0
+        
+
 def getEpicByStory(epic_dict, story, other_epic = True):
-    epic_key = story.raw['fields']['customfield_10434']
+    epic_key = getField(story, "Epic Link")
     if not epic_key or not epic_dict:
         return {}
 
@@ -133,10 +151,29 @@ def getFieldSummary(i, issue_link = True):
         return i.fields.summary
 
 def getFieldAssigneeStr(i, without_id = True):
-    if without_id:
-        return i.fields.assignee.displayName.split(" ")[0]
-    return i.fields.assignee.displayName
+    try:
+        if without_id:
+            result = i.fields.assignee.displayName.split(" ")[0]
+        result = i.fields.assignee.displayName
+    except AttributeError as e:
+        print(e)
+        print("i:"+str(i)+", assignee:"+str(i.fields.assignee))
+        if not i.fields.assignee:
+            result = "Unassigned"
+        else:
+            result = str(i.fields.assignee)
+    return result        
 
+def getFieldCategorizationParams(i):
+    categorization = getField(i, "Categorization")
+    if categorization == "Product":
+        color = "green"
+    elif categorization in ["Productivity", "PoC"]:
+        color = "blue"
+    else:
+        color = "grey"
+    return {"label": categorization, "color": color}
+    
 def getFieldStatusToBadgeParams(i):
     status = i.fields.status.name
     statusLower = status.lower()

@@ -14,15 +14,15 @@ from datetime import datetime as dt
 
 class IManager:
     jql_issues_init = '''
-        project=TVPLAT and (issueType in (initiative, epic, milestone) or (issueType=Story and component = _architecture)) AND summary !~ Non-Initiative AND summary !~ "Planned Q" AND created>-52w
+        project=TVPLAT and ((issueType=initiative and status not in (Delivered, Closed)) or issueType in (epic, milestone) or (issueType=Story and component = _architecture)) AND summary !~ Non-Initiative AND summary !~ "Planned Q" AND created>-52w
     '''
 
     jql_postfix = '''
-        AND ((issueType=initiative and status != Closed) or (issueType!=initiative and updated > -52w)) order by issuetype asc, duedate asc
+        AND ((issueType=initiative and status not in (Delivered, Closed)) or (issueType!=initiative and updated > -52w)) order by issuetype asc, duedate asc
     '''
 
     jql_issues_story = '''
-        project=TVPLAT and (issueType in (Story, Task) AND (issueType!=Story or component != _architecture)) AND summary !~ Non-Initiative AND summary !~ "Planned Q"
+        project=TVPLAT and (issueType in (Story, Task) AND (status !=Closed and issueType!=Story or component != _architecture)) AND summary !~ Non-Initiative AND summary !~ "Planned Q"
     '''
 
     jql_postfix_story = '''
@@ -77,7 +77,6 @@ class IManager:
             if part_name not in self.data['jql']['part']:
                 return True
         return False
-            
 
     def submitData(self):
         st.session_state['il'] = copy.deepcopy(self.il)
@@ -111,10 +110,8 @@ class IManager:
             st.session_state['IManager_part'] = self.data['jql']['part']
 
             self.isJiraUpdating = False
-               
 
         self.renderInitiativesTable()
-        
 
     def addLabelsInGrid(self, grid, list_label):
         for i in list_label:
@@ -158,7 +155,6 @@ class IManager:
         st.session_state['IManager_storyadded'] = False
         return
 
-        
     def filterByIssueType(self, result):
         if not result:
             return
@@ -216,13 +212,13 @@ class IManager:
         g = grid([15, 1], vertical_align="center")
         g.markdown("")
 
-        grid_structure = [[8, 3, 2, 2, 20] for i in range(len(st.session_state['il'])+1)]
+        grid_structure = [[1.8, 8, 1.5, 2.5, 2, 2, 20] for i in range(len(st.session_state['il'])+1)]
         i_grid = grid(*grid_structure, vertical_align="top")
 
         # Labels
-        self.addLabelsInGrid(i_grid, ["Summary", "Status", "Assignee", "Due Date"])
-        options = ["Demo & Milestone", "Arch Review", cNORMAL_EPIC]
-        self.epic_chk = i_grid.radio("**Filter Type**", options)
+        self.addLabelsInGrid(i_grid, ["Category", "Summary", "Status", "Assignee", "Due Date", "Progress"])
+        options = ["Check result", "Demo & Milestone", "Arch Review", cNORMAL_EPIC]
+        self.epic_chk = i_grid.radio("**Filter Type**", options, horizontal = True)
         if (not ("IManager_storyadded" in st.session_state) or st.session_state['IManager_storyadded'] == False) and self.epic_chk == cNORMAL_EPIC:
             print("SET story "+str(st.session_state['IManager_storyadded'])+", "+self.epic_chk)
             self.setStoriesTasksByEpics()
@@ -230,16 +226,19 @@ class IManager:
         else:
             print("NOT set story "+str(st.session_state['IManager_storyadded'])+", "+self.epic_chk)
 
-
         # initiative table
         for i in st.session_state['il']:
+            i_grid.badge(**getFieldCategorizationParams(i))
             i_grid.markdown(getFieldSummary(i))
             i_grid.badge(**getFieldStatusToBadgeParams(i))
             i_grid.markdown(getFieldAssigneeStr(i))
             i_grid.markdown(getFieldDuedate(i))
+            self.rednerProgress(i, i_grid)
             
             epic, epics = None, []
-            if self.epic_chk == "Demo & Milestone":
+            if self.epic_chk == "Check result":
+                type_str = ""
+            elif self.epic_chk == "Demo & Milestone":
                 type_str = "milestone(s)"
                 not_exist_str = "No demo epic & milestones exist"
                 epic = st.session_state['ded'][i.key]
@@ -252,69 +251,107 @@ class IManager:
                 not_exist_str = "No epics exist"
                 epics = st.session_state['oed'][i.key]
                 numEpics = len(epics) if epics else 0
-            
-            if self.epic_chk != cNORMAL_EPIC and epic and epic.key:
-                stories = st.session_state['msd'][epic.key]
-                numChild = len(stories)
-                if numChild > 0:
-                    with i_grid.expander(getFieldSummary(epic, False) + " - {numMilestones} {type_str}".format(numMilestones=numChild, type_str=type_str)):
-                        m_struct = [[3, 1, 1, 1] for i in range(2)]
-                        m_grid = grid(*m_struct, vertical_align="top")
-                        self.addLabelsInGrid(m_grid, ["Summary", "Status", "Assignee", "Due Date"])
-                        m_grid.markdown(getFieldSummary(epic))
-                        m_grid.badge(**getFieldStatusToBadgeParams(epic))
-                        m_grid.markdown(getFieldAssigneeStr(epic))
-                        m_grid.markdown(getFieldDuedate(epic))
-                        st.markdown("< "+type_str+" >")
 
-                        m_struct = [[3, 1, 1, 1] for i in range(numChild)]
-                        m_grid = grid(*m_struct, vertical_align="top")
-                        for idx in range(numChild-1, -1, -1):
-                            m_grid.markdown(getFieldSummary(stories[idx]))
-                            m_grid.badge(**getFieldStatusToBadgeParams(stories[idx]))
-                            m_grid.markdown(getFieldAssigneeStr(stories[idx]))
-                            m_grid.markdown(getFieldDuedate(stories[idx]))
-                else:
-                    with i_grid.container():
-                        r_e = row([3, 1, 1, 1 ])
-                        r_e.markdown(getFieldSummary(epic))
-                        r_e.badge(**getFieldStatusToBadgeParams(epic))
-                        r_e.markdown(getFieldAssigneeStr(epic))
-                        r_e.markdown(getFieldDuedate(epic))
-            elif self.epic_chk != cNORMAL_EPIC:
-                i_grid.markdown(not_exist_str)
+            if self.epic_chk == "Check result":
+                i_grid.markdown("")
+                self.checkInitiative(i, i_grid)
+            else:
+                if self.epic_chk != cNORMAL_EPIC and epic and epic.key:
+                    stories = st.session_state['msd'][epic.key]
+                    numChild = len(stories)
+                    if numChild > 0:
+                        with i_grid.expander(getFieldSummary(epic, False) + " - {numMilestones} {type_str}".format(numMilestones=numChild, type_str=type_str)):
+                            m_struct = [[3, 1, 1, 1] for i in range(2)]
+                            m_grid = grid(*m_struct, vertical_align="top")
+                            self.addLabelsInGrid(m_grid, ["Summary", "Status", "Assignee", "Due Date"])
+                            m_grid.markdown(getFieldSummary(epic))
+                            m_grid.badge(**getFieldStatusToBadgeParams(epic))
+                            m_grid.markdown(getFieldAssigneeStr(epic))
+                            m_grid.markdown(getFieldDuedate(epic))
+                            st.markdown("< "+type_str+" >")
 
-            elif self.epic_chk == cNORMAL_EPIC:   # epic case
-                if epics and numEpics > 0:
-                    with i_grid.expander("Epics: {numEpics}".format(numEpics=numEpics)):
-                        e_struct = [[9, 3, 2, 2, 15] for i in range(len(epics)+1)]
-
-                        e_grid = grid(*e_struct, vertical_align="top")
-                        self.addLabelsInGrid(e_grid, ["Summary", "Status", "Assignee", "Due Date", "Story"])
-
-                        # key_c, summary_c, status_c, duedate_c = i_grid.columns([1, 5, 1, 1])
-                        for epic in epics:
-                            n_stories = 0
-                            if epic and epic.key and st.session_state['msd'][epic.key]:
-                                stories = st.session_state['msd'][epic.key]
-                                n_stories = len(stories)
-                            e_grid.markdown(getFieldSummary(epic))
-                            e_grid.badge(**getFieldStatusToBadgeParams(epic))
-                            e_grid.markdown(getFieldAssigneeStr(epic))
-                            e_grid.markdown(getFieldDuedate(epic))
-                            if n_stories > 0:
-                                with e_grid.expander("Story: {numStories}".format(numStories=n_stories)):
-                                    r_s = row([8, 1, 1, 1])
-                                    for story in stories:
-                                        r_s.markdown(getFieldSummary(story))
-                                        r_s.badge(**getFieldStatusToBadgeParams(story))
-                                        r_s.markdown(getFieldAssigneeStr(story))
-                                        r_s.markdown(getFieldDuedate(story))
-                            else:
-                                e_grid.markdown("No stories exist")
-                else:
+                            m_struct = [[3, 1, 1, 1] for i in range(numChild)]
+                            m_grid = grid(*m_struct, vertical_align="top")
+                            for idx in range(numChild-1, -1, -1):
+                                m_grid.markdown(getFieldSummary(stories[idx]))
+                                m_grid.badge(**getFieldStatusToBadgeParams(stories[idx]))
+                                m_grid.markdown(getFieldAssigneeStr(stories[idx]))
+                                m_grid.markdown(getFieldDuedate(stories[idx]))
+                    else:
+                        with i_grid.container():
+                            r_e = row([3, 1, 1, 1 ])
+                            r_e.markdown(getFieldSummary(epic))
+                            r_e.badge(**getFieldStatusToBadgeParams(epic))
+                            r_e.markdown(getFieldAssigneeStr(epic))
+                            r_e.markdown(getFieldDuedate(epic))
+                elif self.epic_chk != cNORMAL_EPIC:
                     i_grid.markdown(not_exist_str)
+
+                elif self.epic_chk == cNORMAL_EPIC:   # epic case
+                    if epics and numEpics > 0:
+                        with i_grid.expander("Epics: {numEpics}".format(numEpics=numEpics)):
+                            e_struct = [[9, 3, 2, 2, 15] for i in range(len(epics)+1)]
+
+                            e_grid = grid(*e_struct, vertical_align="top")
+                            self.addLabelsInGrid(e_grid, ["Summary", "Status", "Assignee", "Due Date", "Story"])
+
+                            # key_c, summary_c, status_c, duedate_c = i_grid.columns([1, 5, 1, 1])
+                            for epic in epics:
+                                n_stories = 0
+                                if epic and epic.key and st.session_state['msd'][epic.key]:
+                                    stories = st.session_state['msd'][epic.key]
+                                    n_stories = len(stories)
+                                e_grid.markdown(getFieldSummary(epic))
+                                e_grid.badge(**getFieldStatusToBadgeParams(epic))
+                                e_grid.markdown(getFieldAssigneeStr(epic))
+                                e_grid.markdown(getFieldDuedate(epic))
+                                if n_stories > 0:
+                                    with e_grid.expander("Story: {numStories}".format(numStories=n_stories)):
+                                        r_s = row([8, 1, 1, 1])
+                                        for story in stories:
+                                            r_s.markdown(getFieldSummary(story))
+                                            r_s.badge(**getFieldStatusToBadgeParams(story))
+                                            r_s.markdown(getFieldAssigneeStr(story))
+                                            r_s.markdown(getFieldDuedate(story))
+                                else:
+                                    e_grid.markdown("No stories exist")
+                    else:
+                        i_grid.markdown(not_exist_str)
+
+    def checkInitiative(self, i, grid):
         
+        return
+
+
+    def rednerProgress(self, i, grid):
+        if not i.key:
+            grid.markdown("")
+            return
+        categorization = getField(i, "Categorization")
+        demoepic = st.session_state['ded'][i.key]
+        ae = st.session_state['aed'][i.key]
+
+        total_sp, resolved_ms, n_milestones = 0, 0, 0
+        if demoepic and demoepic.key and st.session_state['msd'][demoepic.key]:
+            milestones = st.session_state['msd'][demoepic.key]
+            n_milestones = len(milestones)
+            for milestone in milestones:
+                total_sp += getField(milestone, "Story Points")
+                status = milestone.fields.status.name.lower()
+                if status == "closed":
+                   resolved_ms += 1 
+        resolved = getField(i, "Story Points Info")
+        # with m_grid:
+        if total_sp == 0:
+            p = 0
+        else:
+            p = round(resolved *100 / total_sp)
+        grid.progress(p if p<100 else 100, "sp {r}/{t}, {p}%".format(r = round(resolved), t = round(total_sp), p = p))
+            # if n_milestones == 0:
+            #     m = 0
+            # else:
+            #     m = round(resolved_ms*100 / n_milestones)
+            # st.progress(m if m<100 else 100, "milestone {r}/{t}, {p}%".format(r = resolved_ms, t = n_milestones, p = m))
 
     def example(self):
         random_df = pd.DataFrame(np.random.randn(20, 3), columns=["a", "b", "c"])
