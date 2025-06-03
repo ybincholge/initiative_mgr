@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import datetime as dt
+import datetime
 from utils.db_util import *
 
 class SprintSetting:
@@ -8,6 +9,7 @@ class SprintSetting:
         self.now = dt.now()
         self.year = self.now.year
         self.active_sprint = ""
+        self.sprint_names = []
 
     def initDB(self):
         self.db = DBUtil('sprint')
@@ -70,12 +72,12 @@ class SprintSetting:
             from_str = str(self.year)+"/"+date_str.split("-")[0]
             to_str = str(self.year)+"/"+date_str.split("-")[1]
             from_date = dt.strptime(from_str, '%Y/%m/%d')
-            to_date = dt.strptime(to_str, '%Y/%m/%d')
+            to_date = dt.strptime(to_str, '%Y/%m/%d') + datetime.timedelta(days=1)
             if from_date>to_date:
                 from_str = str(self.year-1)+"/"+date_str.split("-")[0]
                 from_date = dt.strptime(from_str, '%Y/%m/%d')
             
-            if now > from_date and now < to_date:
+            if now >= from_date and now <= to_date:
                 return date
         return None
 

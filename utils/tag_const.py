@@ -6,3 +6,5 @@ slidebar_txt = """
     }
     </style>
     """
+    
+noneStr = "None"

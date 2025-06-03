@@ -146,8 +146,8 @@ class JiraHandler:
             return {"label": status, "color": "grey"}
         elif statusLower in ["approved", "ready", "resolved"]:
             return {"label": status, "color": "green"}
-        elif statusLower in ["open", "screen"]:
-            return {"label": status, "color": "grey"}
+        # elif statusLower in ["open", "screen"]:
+        #     return {"label": status, "color": "blue"}
         else:
             return {"label": status, "color": "blue"}
 

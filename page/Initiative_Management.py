@@ -7,8 +7,10 @@ from streamlit_extras.grid import grid
 from streamlit_extras.row import row
 import numpy as np
 import streamlit_nested_layout
+from utils.tag_const import *
 import copy
 from datetime import datetime as dt
+import plotly.express as px
 
 # st.title("Initiative Management")
 
@@ -35,6 +37,9 @@ class IManager:
     jql_stories = '''
         project=TVPLAT and issueType=story
     '''
+    jql_worklog = '''
+
+    '''
 
     def __init__(self):
         self.data = st.sidebar.data
@@ -42,6 +47,9 @@ class IManager:
         self.settings = st.sidebar.settings
         self.data['memberView'] = False
         self.isJiraUpdating = False
+
+        # statistics
+        self.initStatistics()
 
         if not self.data["account"] and st.session_state["account"]:
             self.data["account"] = st.session_state["account"]
@@ -78,6 +86,68 @@ class IManager:
                 return True
         return False
 
+    def initStatistics(self):
+        if 'progressSP_Total' in st.session_state:
+            self.progressSP_Total = st.session_state['progressSP_Total']
+        else:
+            self.progressSP_Total = st.session_state['progressSP_Total'] = 0
+
+        if 'progressSP_Done' in st.session_state:
+            self.progressSP_Done = st.session_state['progressSP_Done']
+        else:
+            self.progressSP_Done = st.session_state['progressSP_Done'] = 0
+
+        if 'progreessM_Total' in st.session_state:
+            self.progreessM_Total = st.session_state['progreessM_Total']
+        else:
+            self.progreessM_Total = st.session_state['progreessM_Total'] = 0
+
+        if 'progreessM_Done' in st.session_state:
+            self.progreessM_Done = self.progreessM_Done = st.session_state['progreessM_Done']
+        else:
+            self.progreessM_Done = st.session_state['progreessM_Done'] = 0
+
+        if 'checkPassRate_NG' in st.session_state:
+            self.checkPassRate_NG = st.session_state['checkPassRate_NG']
+        else:
+            self.checkPassRate_NG = st.session_state['checkPassRate_NG'] = 0
+
+        if 'checkPassRate_Total' in st.session_state:
+            self.checkPassRate_Total = st.session_state['checkPassRate_Total']
+        else:
+            self.checkPassRate_Total = st.session_state['checkPassRate_Total'] = 0
+
+        if 'n_review_total' in st.session_state:
+            self.n_review_total = st.session_state['n_review_total']
+        else:
+            self.n_review_total = st.session_state['n_review_total'] = 0
+
+        if 'n_ng_review' in st.session_state:
+            self.n_ng_review =  st.session_state['n_ng_review']
+        else:
+            self.n_ng_review =  st.session_state['n_ng_review'] = 0
+
+        if 'ng_review_dict' in st.session_state:
+            self.ng_review_dict =  st.session_state['ng_review_dict']
+        else:
+            self.ng_review_dict =  st.session_state['ng_review_dict'] = {}
+
+        if 'n_ing_total' in st.session_state:
+            self.n_ing_total = st.session_state['n_ing_total']
+        else:
+            self.n_ing_total = st.session_state['n_ing_total'] = 0
+
+        if 'n_ng_ing' in st.session_state:
+            self.n_ng_ing =  st.session_state['n_ng_ing']
+        else:
+            self.n_ng_ing =  st.session_state['n_ng_ing'] = 0
+
+        if 'ng_ing_dict' in st.session_state:
+            self.ng_ing_dict =  st.session_state['ng_ing_dict']
+        else:
+            self.ng_ing_dict =  st.session_state['ng_ing_dict'] = {}
+
+
     def submitData(self):
         st.session_state['il'] = copy.deepcopy(self.il)
         st.session_state['ml'] = copy.deepcopy(self.ml)
@@ -88,7 +158,7 @@ class IManager:
         st.session_state['oed'] = copy.deepcopy(self.oed)
         st.session_state['msd'] = copy.deepcopy(self.msd)
 
-    def renderPage(self):
+    def displayPage(self):
         if not self.jira:
             return
         if not self.data['jql'] or (not self.data['jql']['part'] and not self.data['jql']['team']):
@@ -111,7 +181,7 @@ class IManager:
 
             self.isJiraUpdating = False
 
-        self.renderInitiativesTable()
+        self.displayInitiativesTable()
 
     def addLabelsInGrid(self, grid, list_label):
         for i in list_label:
@@ -208,126 +278,469 @@ class IManager:
                             self.oed[initiative_key].append(e)
                             self.msd[e.key] = getChildIssues(e, self.sl, 'Story')
 
-    def renderInitiativesTable(self):
-        g = grid([15, 1], vertical_align="center")
-        g.markdown("")
+    def displayInitiativesTable(self):
+        st.subheader("Initiative List")
+        with st.expander("**Click**"):
+            grid_structure = [[1.8, 8, 1.8, 1.5, 1.8, 2.5, 20] for i in range(len(st.session_state['il'])+1)]
+            i_grid = grid(*grid_structure, vertical_align="top")
 
-        grid_structure = [[1.8, 8, 1.5, 2.5, 2, 2, 20] for i in range(len(st.session_state['il'])+1)]
-        i_grid = grid(*grid_structure, vertical_align="top")
-
-        # Labels
-        self.addLabelsInGrid(i_grid, ["Category", "Summary", "Status", "Assignee", "Due Date", "Progress"])
-        options = ["Check result", "Demo & Milestone", "Arch Review", cNORMAL_EPIC]
-        self.epic_chk = i_grid.radio("**Filter Type**", options, horizontal = True)
-        if (not ("IManager_storyadded" in st.session_state) or st.session_state['IManager_storyadded'] == False) and self.epic_chk == cNORMAL_EPIC:
-            print("SET story "+str(st.session_state['IManager_storyadded'])+", "+self.epic_chk)
-            self.setStoriesTasksByEpics()
-            pass
-        else:
-            print("NOT set story "+str(st.session_state['IManager_storyadded'])+", "+self.epic_chk)
-
-        # initiative table
-        for i in st.session_state['il']:
-            i_grid.badge(**getFieldCategorizationParams(i))
-            i_grid.markdown(getFieldSummary(i))
-            i_grid.badge(**getFieldStatusToBadgeParams(i))
-            i_grid.markdown(getFieldAssigneeStr(i))
-            i_grid.markdown(getFieldDuedate(i))
-            self.rednerProgress(i, i_grid)
-            
-            epic, epics = None, []
-            if self.epic_chk == "Check result":
-                type_str = ""
-            elif self.epic_chk == "Demo & Milestone":
-                type_str = "milestone(s)"
-                not_exist_str = "No demo epic & milestones exist"
-                epic = st.session_state['ded'][i.key]
-            elif self.epic_chk == "Arch Review":
-                type_str = "arch review tickets"
-                not_exist_str = "No arch review tickets exist"
-                epic = st.session_state['aed'][i.key]
+            # Labels
+            self.addLabelsInGrid(i_grid, ["Category", "Summary", "Status", "Assignee", "Due Date"])
+            options_p = ["SP", "Milestones"]
+            self.progress_chk = i_grid.radio("**Progress rate**", options_p)
+            options = ["Status Color & Summary", "Demo & Milestone", "Arch Review", cNORMAL_EPIC]
+            self.epic_chk = i_grid.radio("**Filter Type**", options, horizontal = True)
+            if (not ("IManager_storyadded" in st.session_state) or st.session_state['IManager_storyadded'] == False) and self.epic_chk == cNORMAL_EPIC:
+                print("SET story "+str(st.session_state['IManager_storyadded'])+", "+self.epic_chk)
+                self.setStoriesTasksByEpics()
+                pass
             else:
-                type_str = "epic(s)"
-                not_exist_str = "No epics exist"
-                epics = st.session_state['oed'][i.key]
-                numEpics = len(epics) if epics else 0
+                print("NOT set story "+str(st.session_state['IManager_storyadded'])+", "+self.epic_chk)
 
-            if self.epic_chk == "Check result":
-                i_grid.markdown("")
-                self.checkInitiative(i, i_grid)
-            else:
-                if self.epic_chk != cNORMAL_EPIC and epic and epic.key:
-                    stories = st.session_state['msd'][epic.key]
-                    numChild = len(stories)
-                    if numChild > 0:
-                        with i_grid.expander(getFieldSummary(epic, False) + " - {numMilestones} {type_str}".format(numMilestones=numChild, type_str=type_str)):
-                            m_struct = [[3, 1, 1, 1] for i in range(2)]
-                            m_grid = grid(*m_struct, vertical_align="top")
-                            self.addLabelsInGrid(m_grid, ["Summary", "Status", "Assignee", "Due Date"])
-                            m_grid.markdown(getFieldSummary(epic))
-                            m_grid.badge(**getFieldStatusToBadgeParams(epic))
-                            m_grid.markdown(getFieldAssigneeStr(epic))
-                            m_grid.markdown(getFieldDuedate(epic))
-                            st.markdown("< "+type_str+" >")
+            # initiative table
+            self.progressSP_Total = 0
+            self.progressSP_Done = 0
+            self.progreessM_Total = 0
+            self.progreessM_Done = 0
+            self.checkPassRate_NG = 0
+            self.checkPassRate_Total = 0
 
-                            m_struct = [[3, 1, 1, 1] for i in range(numChild)]
-                            m_grid = grid(*m_struct, vertical_align="top")
-                            for idx in range(numChild-1, -1, -1):
-                                m_grid.markdown(getFieldSummary(stories[idx]))
-                                m_grid.badge(**getFieldStatusToBadgeParams(stories[idx]))
-                                m_grid.markdown(getFieldAssigneeStr(stories[idx]))
-                                m_grid.markdown(getFieldDuedate(stories[idx]))
-                    else:
-                        with i_grid.container():
-                            r_e = row([3, 1, 1, 1 ])
-                            r_e.markdown(getFieldSummary(epic))
-                            r_e.badge(**getFieldStatusToBadgeParams(epic))
-                            r_e.markdown(getFieldAssigneeStr(epic))
-                            r_e.markdown(getFieldDuedate(epic))
-                elif self.epic_chk != cNORMAL_EPIC:
-                    i_grid.markdown(not_exist_str)
+            for i in st.session_state['il']:
+                i_grid.badge(**getFieldCategorizationParams(i))
+                i_grid.markdown(getFieldSummary(i))
+                i_grid.badge(**getFieldStatusToBadgeParams(i))
+                i_grid.markdown(getFieldAssigneeStr(i))
+                i_grid.markdown(getFieldDuedate(i))
+                self.displayProgress(i, i_grid, self.progress_chk)
 
-                elif self.epic_chk == cNORMAL_EPIC:   # epic case
-                    if epics and numEpics > 0:
-                        with i_grid.expander("Epics: {numEpics}".format(numEpics=numEpics)):
-                            e_struct = [[9, 3, 2, 2, 15] for i in range(len(epics)+1)]
+                epic, epics = None, []
+                if self.epic_chk == "Check result" or self.epic_chk == "Status Color & Summary":
+                    type_str = ""
+                elif self.epic_chk == "Demo & Milestone":
+                    type_str = "milestone(s)"
+                    not_exist_str = "No demo epic & milestones exist"
+                    epic = st.session_state['ded'][i.key]
+                elif self.epic_chk == "Arch Review":
+                    type_str = "arch review tickets"
+                    not_exist_str = "No arch review tickets exist"
+                    epic = st.session_state['aed'][i.key]
+                else:
+                    type_str = "epic(s)"
+                    not_exist_str = "No epics exist"
+                    epics = st.session_state['oed'][i.key]
+                    numEpics = len(epics) if epics else 0
 
-                            e_grid = grid(*e_struct, vertical_align="top")
-                            self.addLabelsInGrid(e_grid, ["Summary", "Status", "Assignee", "Due Date", "Story"])
+                self.checkInitiative(i, i_grid, self.epic_chk == "Check result")
 
-                            # key_c, summary_c, status_c, duedate_c = i_grid.columns([1, 5, 1, 1])
-                            for epic in epics:
-                                n_stories = 0
-                                if epic and epic.key and st.session_state['msd'][epic.key]:
-                                    stories = st.session_state['msd'][epic.key]
-                                    n_stories = len(stories)
-                                e_grid.markdown(getFieldSummary(epic))
-                                e_grid.badge(**getFieldStatusToBadgeParams(epic))
-                                e_grid.markdown(getFieldAssigneeStr(epic))
-                                e_grid.markdown(getFieldDuedate(epic))
-                                if n_stories > 0:
-                                    with e_grid.expander("Story: {numStories}".format(numStories=n_stories)):
-                                        r_s = row([8, 1, 1, 1])
-                                        for story in stories:
-                                            r_s.markdown(getFieldSummary(story))
-                                            r_s.badge(**getFieldStatusToBadgeParams(story))
-                                            r_s.markdown(getFieldAssigneeStr(story))
-                                            r_s.markdown(getFieldDuedate(story))
+                if self.epic_chk == 'Status Color & Summary':
+                    with i_grid.expander(getStatusColor(i)+" Status Summary"):
+                        st.text(getField(i, "Status Summary"))
+                else:
+                    if self.epic_chk != cNORMAL_EPIC and epic and epic.key:
+                        stories = st.session_state['msd'][epic.key]
+                        numChild = len(stories)
+                        if numChild > 0:
+                            with i_grid.expander(getFieldSummary(epic, False) + " - {numMilestones} {type_str}".format(numMilestones=numChild, type_str=type_str)):
+                                if self.epic_chk == "Demo & Milestone":
+                                    m_struct = [[3, 1, 1, 1, 1.5, 1.5] for i in range(2)]
+                                    m_grid = grid(*m_struct, vertical_align="top")
+                                    self.addLabelsInGrid(m_grid, ["Summary", "Status", "Assignee", "Due Date", "Demo", "Dev. Verification"])
                                 else:
-                                    e_grid.markdown("No stories exist")
-                    else:
+                                    m_struct = [[3, 1, 1, 1] for i in range(2)]
+                                    m_grid = grid(*m_struct, vertical_align="top")
+                                    self.addLabelsInGrid(m_grid, ["Summary", "Status", "Assignee", "Due Date"])
+                                m_grid.markdown(getFieldSummary(epic))
+                                m_grid.badge(**getFieldStatusToBadgeParams(epic))
+                                m_grid.markdown(getFieldAssigneeStr(epic))
+                                m_grid.markdown(getFieldDuedate(epic))
+                                st.markdown("< "+type_str+" >")
+
+                                if self.epic_chk == "Demo & Milestone":
+                                    m_struct = [[3, 1, 1, 1, 1.5, 1.5] for i in range(numChild)]
+                                else:
+                                    m_struct = [[3, 1, 1, 1] for i in range(numChild)]
+                                m_grid = grid(*m_struct, vertical_align="top")
+                                for idx in range(numChild-1, -1, -1):
+                                    m_grid.markdown(getFieldSummary(stories[idx]))
+                                    m_grid.badge(**getFieldStatusToBadgeParams(stories[idx]))
+                                    m_grid.markdown(getFieldAssigneeStr(stories[idx]))
+                                    m_grid.markdown(getFieldDuedate(stories[idx]))
+                                    if self.epic_chk == "Demo & Milestone":
+                                        # Demo, Dev. Verification
+                                        m_grid.markdown(getField(stories[idx], "Demonstration"))
+                                        m_grid.markdown(getField(stories[idx], "Dev. Verification"))
+                    elif self.epic_chk != cNORMAL_EPIC and self.epic_chk != 'Check result' and self.epic_chk != 'Status Color & Summary':
                         i_grid.markdown(not_exist_str)
 
-    def checkInitiative(self, i, grid):
-        
+                    elif self.epic_chk == cNORMAL_EPIC:   # epic case
+                        n_e_ing = 0
+                        n_e_open = 0
+                        n_e_close = 0
+
+                        if epics and numEpics > 0:
+                            for e in epics:
+                                if isCompletedStatusEpic(e):
+                                    n_e_close +=1
+                                elif isInprogressEpic(e):
+                                    n_e_ing += 1
+                                else:
+                                    n_e_open += 1
+
+                            with i_grid.expander("Epics: {numEpics} (Open:{open}, In Progress:{ing}, Delivered:{close})".format(numEpics=numEpics, open=n_e_open, ing=n_e_ing, close=n_e_close)):
+                                e_struct = [[9, 3, 2, 2, 10] for i in range(2)]
+                                e_grid = grid(*e_struct, vertical_align="top")
+                                self.addLabelsInGrid(e_grid, ["Summary", "Status", "Assignee", "Due Date", "Detail"])
+
+                                # key_c, summary_c, status_c, duedate_c = i_grid.columns([1, 5, 1, 1])
+                                idx = 0
+                                while idx < len(epics):
+                                    epic = epics[idx]
+                                    n_stories = 0
+                                    if epic and epic.key and st.session_state['msd'][epic.key]:
+                                        stories = st.session_state['msd'][epic.key]
+                                        n_stories = len(stories)
+                                    e_grid.markdown(getFieldSummary(epic))
+                                    e_grid.badge(**getFieldStatusToBadgeParams(epic))
+                                    e_grid.markdown(getFieldAssigneeStr(epic))
+                                    e_grid.markdown(getFieldDuedate(epic))
+                                    with e_grid.popover("Click"):
+                                        ed_struct = [[2, 10] for i in range(3)]
+                                        ed_grid = grid(*ed_struct, vertical_align='top')
+                                        ed_grid.markdown("Sprint")
+                                        ed_grid.markdown(getField(epic, "Sprint"), unsafe_allow_html = True)
+                                        ed_grid.markdown("DoD")
+                                        ed_grid.markdown(getField(epic, "DoD"))
+                                        ed_grid.markdown("Description")
+                                        ed_grid.markdown(getField(epic, "Description"), unsafe_allow_html = True)
+                                    c1, c2 = st.columns([1, 15])
+                                    with c2:
+                                        if n_stories > 0:
+                                            with st.expander("  Story: {numStories}".format(numStories=n_stories)):
+                                                r_s = row([7, 1.5, 1, 1.5])
+                                                for story in stories:
+                                                    r_s.markdown(getFieldSummary(story))
+                                                    r_s.badge(**getFieldStatusToBadgeParams(story))
+                                                    r_s.markdown(getFieldAssigneeStr(story))
+                                                    r_s.markdown(getFieldDuedate(story))
+                                        else:
+                                            st.markdown("  No stories exist ")
+
+                                    idx += 1
+                                    e_struct = [[9, 3, 2, 2, 10] for i in range(1)]
+                                    e_grid = grid(*e_struct, vertical_align="top")
+
+                        else:
+                            i_grid.markdown(not_exist_str)
+
+        self.submitCheckResult()
+
+        # display statistics
+        self.displayStatistics()
+
+
+    def submitCheckResult(self):
+        if st.session_state['progressSP_Total'] != self.progressSP_Total:
+            st.session_state['progressSP_Total'] = self.progressSP_Total
+        if st.session_state['progressSP_Done'] != self.progressSP_Done:
+            st.session_state['progressSP_Done'] = self.progressSP_Done
+        if st.session_state['progreessM_Total'] != self.progreessM_Total:
+            st.session_state['progreessM_Total'] = self.progreessM_Total
+        if st.session_state['progreessM_Done'] != self.progreessM_Done:
+            st.session_state['progreessM_Done'] = self.progreessM_Done
+        if st.session_state['checkPassRate_NG'] != self.checkPassRate_NG:
+            st.session_state['checkPassRate_NG'] = self.checkPassRate_NG
+        if st.session_state['checkPassRate_Total'] != self.checkPassRate_Total:
+            st.session_state['checkPassRate_Total'] = self.checkPassRate_Total
+
+    def checkInitiative(self, i, grid, displayCheckResult):
+        if isReviewStatusForInitiatives(i):
+            checkResult = self.checkEssentialFieldForPOandELT(i)
+            if displayCheckResult:
+                grid.markdown("필수필드 입력 " + str(checkResult))
+        elif isInprogressForInitiatives(i):
+            ngExist, ngDtail = self.checkArch(i)
+            ngExist2, ngDtail2 = self.checkDemoEpic(i)
+            # if displayCheckResult:
+            #     grid.markdown(result)
+            if ngExist or ngExist2:
+                self.checkPassRate_NG += 1
+                self.n_ng_ing += 1
+                self.ng_ing_dict[i.key] = {"issue": i, "archDetail": ngDtail, "demoDetail": ngDtail2}
         return
 
+    def checkArch(self, i):
+        # TODO
+        # Due Date active sprint 포함 여부, 상태 확인 검사 추가 고려
 
-    def rednerProgress(self, i, grid):
+        archiEpic = self.aed[i.key]
+        changeScope = getField(i, "Scope of change")
+
+        self.n_ing_total += 1
+        self.checkPassRate_Total += 1
+        ngExist = False
+        ngClause = []
+
+        if isProductCategorization(i) and "N/A" != changeScope:
+            ngExist, ngDetail = self.checkArchDetail(archiEpic)
+        # else:
+        #     result = "✅ (Scope Of Change: "+changeScope+")"
+        if ngExist:
+            # result = "❌ ("+ngDetail+")"
+            return True, ngDetail
+
+        return ngExist, ""
+
+    def checkArchDetail(self, archEpic):
+        if not archEpic:
+            return True, "아키리뷰 티켓 생성"
+
+        due = getField(archEpic, "Due Date")
+        isNG = False
+        ngDetails = []
+        prefixNGDetails = getLinkText(archEpic, "아키리뷰")+"의 "
+        if not isValid(due):
+            isNG = True
+            ngDetails.append("Due date 설정")
+        if isOpenStatus(archEpic):
+            isNG = True
+            ngDetails.append("Status 변경")
+
+        if isNG:
+            return isNG, prefixNGDetails+(", ".join(ngDetails))
+        return isNG, ""
+
+    def checkDemoEpic(self, i):
+        demoEpic = self.ded[i.key]
+
+        if demoEpic and demoEpic.key:
+            ngExist, ngDetails = self.checkDemoEpicDetail(i, demoEpic)
+            return ngExist, ngDetails
+        else:
+            return False, ""
+
+    def checkDemoEpicDetail(self, initiative, demoEpic):
+        iDue = getField(initiative, "Due Date")
+        due = getField(demoEpic, "Due Date")
+
+        if isCompletedStatus(demoEpic):
+            return False, ""
+
+        isNG = False
+        prefixNGDetails = getLinkText(demoEpic, "Demo epic")+"의 "
+        ngDetails = []
+        if not isValid(due):
+            isNG = True
+            ngDetails.append("Due Date 설정")
+        elif iDue<due:
+            isNG = True
+            ngDetails.append("Due Date 변경 (이니셔티브 Due Date:"+iDue+")")
+
+        if isOpenStatus(demoEpic):
+            isNG = True
+            ngDetails.append("Status 변경")
+
+        ms = self.msd[demoEpic.key]
+        isInprogressMS = False
+        ms_soon = None
+        for milestone in ms:
+            if isInprogressForMilestone(milestone):
+                isInprogressMS = True
+                break
+            else:
+                if not ms_soon:
+                    ms_soon = milestone
+                else:
+                    if getField(milestone, "Due Date") < getField(ms_soon, "Due Date"):
+                        ms_soon = milestone
+
+        else:
+            if isInprogressMS == False and ms_soon:
+                isNG = True
+                ngDetails.append("하위에 진행 중인 Milestone 없으므로 "+getLinkText(ms_soon, "Milestone")+"의 상태 변경, Demo 대상(Demonstration)과 검증결과 필요여부(Dev. Verification) 설정 확인")
+
+        if not isNG:
+            return False, ""
+
+        return isNG, prefixNGDetails+(", ".join(ngDetails))
+
+
+    def checkEssentialFieldForPOandELT(self, i):
+        # TODO
+        # 본문 parsing 및 조건 추가 고려, webOS Review Field 추가 고려
+
+        checkResult = {
+            "PO Review": "✅",
+            "ELT Review": "✅",
+        }
+
+        po = {
+            "Fix version/s": getField(i, "Fix Version/s"),
+            "Grouping": getField(i, "Grouping"),
+            "Categorization": getField(i, "Categorization")
+        }
+
+        elt = {
+            "Due Date": getField(i, "Due Date"),
+            "Release Sprint": getField(i, "Release Sprint"),
+            "Component/s": getField(i, "Component/s"),
+            "Scope Of Change": getField(i, "Scope of change"),
+            "SoC Dependency": getField(i, "Soc Dependency"),
+            "Controllability Risk": getField(i, "Controllability Risk"),
+            "Estimated Effort": getField(i, "Estimated Effort"),
+            "SRS작성필요여부": getField(i, "SRS"),
+            "Development Scope": getField(i, "SRS"),
+        }
+
+        poNgExist, eltNgExist = False , False
+        poNotClauses = []
+        eltNotClauses = []
+
+        self.n_review_total += 1
+        self.checkPassRate_Total += 1
+        for k in po.keys():
+            if not isValid(po[k]):
+               poNgExist = True
+               poNotClauses.append(k)
+        if poNgExist:
+            checkResult['PO Review'] = "❌ ("+", ".join(poNotClauses)+")"
+
+        if isProductCategorization(i):
+            for k in elt.keys():
+                if not isValid(elt[k]):
+                    eltNgExist = True
+                    eltNotClauses.append(k)
+        else:   # PoC, Productivity, Governing, Operation, SCM
+            checkFields = ["Due Date", "Release Sprint", "Component/s", "Scope Of Change"]
+            for k in elt.keys():
+                if k in checkFields and (not isValid(elt[k])):
+                    eltNgExist = True
+                    eltNotClauses.append(k)
+
+        if eltNgExist:
+            checkResult['ELT Review'] = "❌ ("+", ".join(eltNotClauses)+")"
+
+        if poNgExist or eltNgExist:
+            self.checkPassRate_NG += 1
+            self.n_ng_review += 1
+            self.ng_review_dict[i.key] = {"issue": i, "detail": ", ".join(poNotClauses+eltNotClauses)}
+
+        return checkResult
+
+    def displayStatistics(self):
+        # st.session_state['progressSP_Total']
+        # st.session_state['progressSP_Done']
+        # st.session_state['progreessM_Total']
+        # st.session_state['progreessM_Done']
+        # st.session_state['checkPassRate_NG']
+        # st.session_state['checkPassRate_Total']
+
+        st.markdown("")
+        # c1, c2= st.columns([1, 0.1])
+        # with c1:
+        st.subheader("Overall Progress")
+        with st.expander("**Click**"):
+            c11, c112, c12 = st.columns([1, 0.1, 1])
+            with c11:
+                remain = st.session_state['progressSP_Total'] - st.session_state['progressSP_Done']
+                if st.session_state['progressSP_Total'] == 0:
+                    p = 0
+                else:
+                    p = round(st.session_state['progressSP_Done'] *100 / st.session_state['progressSP_Total'])
+                st.write("Story Points")
+                st.progress(p if p<100 else 100, "{p}% ({r}/{t})".format(r = round(st.session_state['progressSP_Done']), t = round(st.session_state['progressSP_Total']), p = p))
+            with c12:
+                remain = st.session_state['progreessM_Total'] - st.session_state['progreessM_Done']
+                if st.session_state['progreessM_Total'] == 0:
+                    p = 0
+                else:
+                    p = round(st.session_state['progreessM_Done'] * 100 / st.session_state['progreessM_Total'])
+                st.write("Num. of Milestone")
+                st.progress(p if p<100 else 100, "{p}% ({r}/{t})".format(r = round(st.session_state['progreessM_Done']), t = round(st.session_state['progreessM_Total']), p = p))
+
+                # "Done": [st.session_state['progressSP_Done']],
+                # "Remain": [st.session_state['progressSP_Total'] - st.session_state['progressSP_Done']]
+
+        st.markdown("")
+        st.subheader("Check rules")
+        with st.expander("**Click**"):
+            c11, c12, c13 = st.columns([1, 1, 1])
+            n_pass_all = self.checkPassRate_Total - self.checkPassRate_NG
+            n_pass_review = self.n_review_total - self.n_ng_review
+            n_pass_ing = self.n_ing_total - self.n_ng_ing
+
+            data = {
+                'state': ['Pass', 'Fail'],
+                'Overall': [n_pass_all, self.checkPassRate_NG],
+                'Reviewing': [n_pass_review, self.n_ng_review],
+                'InProgress': [n_pass_ing, self.n_ng_ing],
+                'color': ['a', 'b']
+            }
+            df = pd.DataFrame(data)
+
+            with c11:
+                if n_pass_all < self.checkPassRate_NG:  # 범레 표시 순서
+                    torder = 'reversed'
+                else:
+                    torder = 'grouped'
+                fig = px.pie(df, values='Overall', names = 'state', title = "Overall", height=250, width=250, color="color")
+                fig.update_layout(margin=dict(l=20, r=20, t=30, b=0), legend_traceorder=torder)
+                st.plotly_chart(fig, use_container_width=True, ) #, theme=None)
+            with c12:
+                if n_pass_review < self.n_ng_review:
+                    torder = 'reversed'
+                else:
+                    torder = 'grouped'
+                fig = px.pie(df, values='Reviewing', names = 'state', title = 'In Reviewing', height=250, width=250, color="color")
+                fig.update_layout(margin=dict(l=20, r=20, t=30, b=0), legend_traceorder=torder)
+                st.plotly_chart(fig, use_container_width=True, ) #, theme=None)
+
+            with c13:
+                if n_pass_ing < self.n_ng_ing:
+                    torder = 'reversed'
+                else:
+                    torder = 'grouped'
+                fig = px.pie(df, values='InProgress', names = 'state', title = 'In progress', height=250, width=250, color="color")
+                fig.update_layout(margin=dict(l=20, r=20, t=30, b=0), legend_traceorder=torder)
+                st.plotly_chart(fig, use_container_width=True, ) #, theme=None)
+
+            st.markdown("")
+            if self.ng_review_dict or self.ng_ing_dict:
+                if self.ng_review_dict:
+                    st.write("*Review 중인 과제에서,*")
+                    for i in self.ng_review_dict.keys():
+                        c21, c22 = st.columns([10, 1])
+                        with c21:
+                            st.markdown(getFieldKey(self.ng_review_dict[i]['issue'])+'는 '+self.ng_review_dict[i]['detail'] +" 설정이 필요합니다.")
+                        with c22:
+                            with st.popover("설정하기"):
+                                archEpic = self.aed[i]
+                                urlToEdit = "hlm.lge.com/issue/secure/EditIssue!default.jspa?id="+archEpic.self.split("/")[-1]
+                                print("urlToEdit = "+urlToEdit)
+                                st.components.v1.iframe(urlToEdit, height = 500, scrolling=True)
+                if self.ng_ing_dict:
+                    st.markdown("*In Progress 과제에서,*")
+                    for i in self.ng_ing_dict.keys():
+                        c21, c22 = st.columns([10, 1])
+                        with c21:
+                            if self.ng_ing_dict[i]['archDetail']:
+                                if self.ng_ing_dict[i]['demoDetail']:
+                                    st.markdown(getFieldKey(self.ng_ing_dict[i]['issue'])+'는 '+self.ng_ing_dict[i]['archDetail'] +"이 필요하고, "+ self.ng_ing_dict[i]['demoDetail']+"이 필요합니다.")
+                                else:
+                                    st.markdown(getFieldKey(self.ng_ing_dict[i]['issue'])+'는 '+self.ng_ing_dict[i]['archDetail'] +"이 필요합니다.")
+                            else:
+                                if self.ng_ing_dict[i]['demoDetail']:
+                                    st.markdown(getFieldKey(self.ng_ing_dict[i]['issue'])+'는 '+self.ng_ing_dict[i]['demoDetail'] +"이 필요합니다.")
+                                else:
+                                    st.markdown(getFieldKey(self.ng_ing_dict[i]['issue'])+'는 뭐임?')
+
+        # [st.session_state['checkPassRate_Total'] - st.session_state['checkPassRate_NG'], st.session_state['checkPassRate_Total']],
+        # [st.session_state['progreessM_Done'], st.session_state['progreessM_Total'] - st.session_state['progreessM_Done']],
+        pass
+
+    def displayProgress(self, i, grid, baseType):
         if not i.key:
             grid.markdown("")
             return
-        categorization = getField(i, "Categorization")
         demoepic = st.session_state['ded'][i.key]
         ae = st.session_state['aed'][i.key]
 
@@ -335,23 +748,38 @@ class IManager:
         if demoepic and demoepic.key and st.session_state['msd'][demoepic.key]:
             milestones = st.session_state['msd'][demoepic.key]
             n_milestones = len(milestones)
+
             for milestone in milestones:
-                total_sp += getField(milestone, "Story Points")
+                milestone_sp = getField(milestone, "Story Points")
+                total_sp += milestone_sp
                 status = milestone.fields.status.name.lower()
                 if status == "closed":
-                   resolved_ms += 1 
+                   resolved_ms += 1
+
+        # ["Story Points", "Milestone"]
+        ## baseType: SP case
         resolved = getField(i, "Story Points Info")
-        # with m_grid:
-        if total_sp == 0:
-            p = 0
-        else:
-            p = round(resolved *100 / total_sp)
-        grid.progress(p if p<100 else 100, "sp {r}/{t}, {p}%".format(r = round(resolved), t = round(total_sp), p = p))
-            # if n_milestones == 0:
-            #     m = 0
-            # else:
-            #     m = round(resolved_ms*100 / n_milestones)
-            # st.progress(m if m<100 else 100, "milestone {r}/{t}, {p}%".format(r = resolved_ms, t = n_milestones, p = m))
+
+        self.progressSP_Total += total_sp
+        self.progressSP_Done += resolved
+        ## baseType: Milestone case
+        self.progreessM_Total += n_milestones
+        self.progreessM_Done += resolved_ms
+
+        if baseType == "SP":
+            if total_sp == 0:
+                p = 0
+            else:
+                p = round(resolved *100 / total_sp)
+            grid.progress(p if p<100 else 100, "{p}% ({r}/{t})".format(r = round(resolved), t = round(total_sp), p = p))
+        else: # milestones
+            if n_milestones == 0:
+                m = 0
+            else:
+                m = round(resolved_ms*100 / n_milestones)
+            grid.progress(m if m<100 else 100, "{p}% ({r}/{t})".format(r = resolved_ms, t = n_milestones, p = m))
+
+
 
     def example(self):
         random_df = pd.DataFrame(np.random.randn(20, 3), columns=["a", "b", "c"])
@@ -394,7 +822,7 @@ class IManager:
 
 
 im = IManager()
-im.renderPage()
+im.displayPage()
 
 
 # st.title("🐙 Streamlit-tree-select")

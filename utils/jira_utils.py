@@ -1,13 +1,17 @@
 from time import sleep
 from jira.client import JIRA
 from jira import JIRAError
-
+from utils.tag_const import *
 
 # epic key (from story, milestone issue)
 # i.raw['fields']['customfield_10434'] : 'TVPLAT-XXXXX' as epickey
 
 
 cNORMAL_EPIC = "Epics"
+
+
+def isValid(value):
+    return value and value != noneStr and value != 0
 
 def getChildIssues(epic, stories, issuetype = 'All'):
     child_result = []
@@ -20,23 +24,143 @@ def getChildIssues(epic, stories, issuetype = 'All'):
     
     return child_result        
 
-def getField(i, field):
+def getFieldDuedate(i):
+    return i.fields.duedate
+
+def getField(i, field, print_debug = False):
     if field == "Epic Link":
-        return i.raw['fields']['customfield_10434']
+        if i.raw['fields']['customfield_10434']:
+            return i.raw['fields']['customfield_10434']
+        else:
+            return noneStr
+    elif field == "Status":
+        if i.fields.status and i.fields.status.name:
+            return i.fields.status.name
+        else:
+            return noneStr
     elif field == "Categorization":
         result = i.raw['fields']['customfield_20769']
         if result and result['value']:
             return result['value']
-        return "None"
+        return noneStr
     elif field == "Story Points":
-        return i.raw['fields']['customfield_10002']
+        if i.raw['fields']['customfield_10002']:
+            return i.raw['fields']['customfield_10002']
+        return 0
     elif field == "Story Points Info":
-        storyPointsInfo = i.raw['fields']['customfield_15710']
+        storyPointsInfo = i.raw['fields']['customfield_26223']
         try:
-            return float(storyPointsInfo.split(" (Resolved")[0].split("Total : ")[1].split(" / ")[0])
+            result = float(storyPointsInfo.split(" (Resolved")[0].split("Total : ")[1].split(" / ")[0])
+            return result
         except Exception as e:
+            print("exception e : "+str(e))
             return 0
-        
+    elif field == "Fix Version/s":
+        if i.fields.fixVersions:
+            return ",".join([v.name for v in i.fields.fixVersions])
+        return noneStr
+    elif field == "Grouping":
+        if i.raw['fields']['customfield_15606']:
+            return i.raw['fields']['customfield_15606']['value']
+        else:
+            return noneStr
+    elif field == "Due Date":
+        duedate = getFieldDuedate(i)
+        if duedate:
+            return duedate
+        return noneStr
+    elif field == "Component/s":
+        if i.fields.components:
+            return ",".join([v.name for v in i.fields.components])
+        return noneStr
+    elif field == "Release Sprint":
+        if i.raw['fields']['customfield_15926']:
+            return i.raw['fields']['customfield_15926'][0]
+        return noneStr
+    elif field == "Scope of change":
+        if i.raw['fields']['customfield_15104']:
+            return i.raw['fields']['customfield_15104']['value']
+        return noneStr
+    elif field == "Soc Dependency":
+        if i.raw['fields']['customfield_19743']:
+            return ",".join([v['value'] for v in i.raw['fields']['customfield_19743']])
+        return noneStr
+    elif field == "Controllability Risk":
+        if i.raw['fields']['customfield_20802']:
+            return i.raw['fields']['customfield_20802']['value']
+        return noneStr
+    elif field == "Estimated Effort":
+        if i.raw['fields']['customfield_15244']:
+            return i.raw['fields']['customfield_15244']['value']
+        return noneStr
+    elif field == "SRS":
+        if i.raw['fields']['customfield_20754']:
+            return i.raw['fields']['customfield_20754']['value']
+        return noneStr
+    elif field == "Development Scope":
+        if i.raw['fields']['customfield_25600']:
+            return ",".join([v['value'] for v in i.raw['fields']['customfield_25600']])
+        return noneStr
+    elif field == "Demonstration":
+        if i.raw['fields']['customfield_22708']:
+            return i.raw['fields']['customfield_22708']['value']
+        return noneStr
+    elif field == "Dev. Verification":
+        if i.raw['fields']['customfield_22709']:
+            return i.raw['fields']['customfield_22709']['value']
+        return noneStr
+    elif field == 'Status Color':
+        if i.raw['fields']['customfield_15711']:
+            return i.raw['fields']['customfield_15711']['value']
+        return noneStr
+    elif field == 'Status Summary':
+        if i.raw['fields']['customfield_15710']:
+            return i.raw['fields']['customfield_15710']
+        return noneStr
+    elif field == 'Sprint':
+        if i.raw['fields']['customfield_10005']:
+            return '<p>'+'</p><p>'.join([s.split("name=")[-1].split(",")[0] for s in i.raw['fields']['customfield_10005']])+"</p>"
+        return ""
+    elif field == 'DoD':
+        if i.raw['fields']['customfield_10603']:
+            return i.raw['fields']['customfield_10603']
+        return noneStr
+    elif field == "Description":
+        if i.raw['fields']['description']:
+            return '<p>' + '</p><p>'.join(i.raw['fields']['description'].split("\r\n")) + "</p>"
+        return noneStr
+
+def getStatusColor(i):
+    if getField(i, "Status Color").upper() == "GREEN":
+        return "🟩"
+    elif getField(i, "Status Color").upper() == "YELLOW":
+        return "🟨"
+    elif getField(i, "Status Color").upper() == "RED":
+        return "🟥"
+    else:
+        return ""
+
+def isOpenStatus(i):
+    return getField(i, "Status").upper() in ["DRAFTING", "SCOPING", "OPEN"]
+
+def isReviewStatusForInitiatives(i):
+    return getField(i, "Status").upper() in ["DRAFTING", "PO REVIEW", "ELT REVIEW"]
+
+def isCompletedStatus(i):
+    return getField(i, "Status").upper() in ["DELIVERED", "DEFERRED", "CLOSED"]
+
+def isInprogressForInitiatives(i):
+    return (not isOpenStatus(i)) and (not isReviewStatusForInitiatives(i)) and (not isCompletedStatus(i))
+
+def isInprogressForMilestone(i):
+    return getField(i, "Status").upper() == "IN PROGRESS"
+
+def isOpenEpic(i):
+    return getField(i, "Status").upper() in ["REVIEW", "SCOPING", "OPEN"]
+def isInprogressEpic(i):
+    return getField(i, "Status").upper() == "IN PROGRESS"
+def isCompletedStatusEpic(i):
+    return getField(i, "Status").upper() in ["DELIVERED", "DEFERRED", "CLOSED"]
 
 def getEpicByStory(epic_dict, story, other_epic = True):
     epic_key = getField(story, "Epic Link")
@@ -150,11 +274,21 @@ def getFieldSummary(i, issue_link = True):
     else:
         return i.fields.summary
 
+def getFieldKey(i, issue_link = True):
+    if issue_link:
+        return "["+i.key+"]("+i.permalink()+")"
+    else:
+        return i.key
+
+def getLinkText(i, text):
+    return "["+text+"]("+i.permalink()+")"
+
 def getFieldAssigneeStr(i, without_id = True):
     try:
         if without_id:
             result = i.fields.assignee.displayName.split(" ")[0]
-        result = i.fields.assignee.displayName
+        else:
+            result = i.fields.assignee.displayName
     except AttributeError as e:
         print(e)
         print("i:"+str(i)+", assignee:"+str(i.fields.assignee))
@@ -177,19 +311,20 @@ def getFieldCategorizationParams(i):
 def getFieldStatusToBadgeParams(i):
     status = i.fields.status.name
     statusLower = status.lower()
-    if statusLower in ["in progress"]:
+    if statusLower in ["in progress", "implementation"]:
         return {"label": status, "color": "orange"}
     if statusLower in ["closed", "proposed to defer", "delivered", "deferred"]:
         return {"label": status, "color": "grey"}
     elif statusLower in ["approved", "ready", "resolved"]:
         return {"label": status, "color": "green"}
-    elif statusLower in ["open", "screen"]:
-        return {"label": status, "color": "grey"}
+    # elif statusLower in ["open", "screen"]:
+    #     return {"label": status, "color": "grey"}
     else:
         return {"label": status, "color": "blue"}
 
-def getFieldDuedate(i):
-    return i.fields.duedate
+
+def isProductCategorization(i):
+    return "Product" == getField(i, "Categorization")
 
 def isStoryStatus(issue_story, check_status):
     issue_status = issue_story.fields.status.name.lower()
@@ -204,7 +339,7 @@ def isStoryStatus(issue_story, check_status):
     return issue_status not in ["screen", "analysis", "verify", "closed"]
 
 
-    
+
 def test_jira(pwd):
     return JIRA({'server': 'http://hlm.lge.com/issue'}, basic_auth=("ybin.cho", pwd))
 

@@ -157,7 +157,7 @@ class SideBar:
         st.session_state.logged_in = False
 
     def add_menu(self):
-        im_page = st.Page("page/Initiative_Management.py", title ="📔 Initiative Management")
+        im_page = st.Page("page/Initiative_Management.py", title ="📔 Initiative & Milestone")
         ms_page = st.Page("page/Milestone_Management.py", title = "📘 Milestone Management")
         sp_page = st.Page("page/Sprint_Planning.py", title = "📆 Sprint Planning")
         sr_page = st.Page("page/Sprint_Review.py", title = "📅 Sprint Review")
@@ -171,7 +171,7 @@ class SideBar:
         if "logged_in" in st.session_state and st.session_state.logged_in:
             pg = st.navigation(
                 {
-                    "For Leader & Initiative Owner": [im_page, ms_page],
+                    "For Leader & Initiative Owner": [im_page], #ms_page],
                     "For Team & Part": [sp_page, sr_page],
                     "Settings": [so_page, ss_page,], # [s_page]
                     "Help": [jr_page]
