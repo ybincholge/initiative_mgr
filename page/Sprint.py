@@ -88,13 +88,13 @@ class SprintSetting:
         to_str = str(self.year)+"/"+date_str.split("-")[1]
         from_date = dt.strptime(from_str, '%Y/%m/%d')
         to_date = dt.strptime(to_str, '%Y/%m/%d')
+        week_num = to_date.weekday()        # 0: 월, ... 6: 일
+        to_date = to_date + datetime.timedelta(days=6-week_num) # 일요일 구하기 (주말특근 포함..)
+
         if from_date>to_date:
             from_str = str(self.year-1)+"/"+date_str.split("-")[0]
             from_date = dt.strptime(from_str, '%Y/%m/%d')
-        
         return from_date.strftime('%Y-%m-%d'), to_date.strftime('%Y-%m-%d')
-        
-        
 
 sprint_setting = SprintSetting()
 sprint_setting.renderPage()

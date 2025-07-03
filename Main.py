@@ -8,7 +8,7 @@ from streamlit_theme import st_theme
 from page.Sprint import *
 from page.Organization import *
 
-st.set_page_config(page_title="SWIM", page_icon = "📔" ,layout="wide")
+st.set_page_config(page_title="SWIM", page_icon = "♾️" ,layout="wide")
 
 class SideBar:
     def __init__(self, accUtil, sprintSetting, orgsetting):

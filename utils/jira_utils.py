@@ -8,7 +8,9 @@ from utils.tag_const import *
 
 
 cNORMAL_EPIC = "Epics"
+cWORKLOG_EPIC = "WorkLogs (selected sprint)"
 
+i_fields = [""]
 
 def isValid(value):
     return value and value != noneStr and value != 0
@@ -26,6 +28,74 @@ def getChildIssues(epic, stories, issuetype = 'All'):
 
 def getFieldDuedate(i):
     return i.fields.duedate
+
+def getFieldStatusToBadgeParams(i):
+    status = i.fields.status.name
+    statusLower = status.lower()
+    if statusLower in ["in progress"]:
+        return {"label": status, "color": "orange"}
+    if statusLower in ["closed", "proposed to defer", "delivered", "deferred"]:
+        return {"label": status, "color": "grey"}
+    elif statusLower in ["approved", "ready", "resolved"]:
+        return {"label": status, "color": "green"}
+    # elif statusLower in ["open", "screen"]:
+    #     return {"label": status, "color": "blue"}
+    else:
+        return {"label": status, "color": "blue"}
+
+def getFieldCategorizationParams(i):
+    categorization = getField(i, "Categorization")
+    if categorization == "Product":
+        color = "green"
+    elif categorization in ["Productivity", "PoC"]:
+        color = "blue"
+    else:
+        color = "grey"
+    return {"label": categorization, "color": color}
+
+def createIssueObjectForDB(issueType, i, dbUpdator):
+    result = {
+        "key": i.key,
+        "Categorization": getFieldCategorizationParams(i),
+        "Summary": getFieldSummary(i),
+        "Status": getFieldStatusToBadgeParams(i),
+        "assignee": getFieldAssigneeStr(i),
+        "duedate": getFieldDuedate(i),
+        "Description": getField(i, "Description"),
+    }
+
+    if issueType == "initiative":
+        result['publish'] = {"arch": None, "demo": None, "epics":  None}
+        result["demo"] = createIssueObjectForDB("demo", dbUpdator.ded[i.key], dbUpdator)
+        result["arch"] = createIssueObjectForDB("arch", dbUpdator.aed[i.key], dbUpdator)
+        result["epic"] = createIssueObjectForDB("epic", dbUpdator.oed[i.key], dbUpdator)
+        result["Status Color"] = getFieldColor(i, "Status Color")
+        result['Status Summary'] = getField('Status Summary')
+        result['SE_Quality'] = getFieldColor(i, "SE_Quality")
+        result['SE_Delivery'] = getFieldColor(i, "SE_Delivery")
+        result['Scope of change'] = getField(i, "Scope of change")
+        result['Fix Version/s'] = getField(i, "Fix Version/s")
+        result['Grouping'] = getField(i, 'Grouping')
+        result['Platform Upgrade restrictions'] = getField(i, "Platform Upgrade restrictions")
+        result['Platform Upgrade exception models'] = getField(i, "Platform Upgrade exception models")
+        result['HW restrictions'] = getField(i, "HW restrictions")
+        result['Data Migration'] = getField(i, "Data Migration")
+        pass
+    elif issueType == "arch":
+        pass
+    elif issueType == "demo":
+        result['']
+        pass
+    elif issueType == "epic":
+        pass
+    elif issueType == "story":
+        result['worklogs'] = getField(i, "worklogs")
+        pass
+    elif issueType == "Milestone":
+        result['Demo'] = getField(i, "Demonstration")
+        result['Dev. Verification'] = getField(i, "Dev. Verification")
+        pass
+    return
 
 def getField(i, field, print_debug = False):
     if field == "Epic Link":
@@ -127,18 +197,56 @@ def getField(i, field, print_debug = False):
         return noneStr
     elif field == "Description":
         if i.raw['fields']['description']:
-            return '<p>' + '</p><p>'.join(i.raw['fields']['description'].split("\r\n")) + "</p>"
+            return '<p>' + '</p><p>'.join([i for i in i.raw['fields']['description'].split("\r\n") if i.strip()]) + "</p>"
         return noneStr
+    elif field == "SE_Quality":
+        if i.raw['fields']['customfield_16987'] and i.raw['fields']['customfield_16987']['value']:
+            return i.raw['fields']['customfield_16987']['value']
+        else:
+            return noneStr
+    elif field == "SE_Delivery":
+        if i.raw['fields']['customfield_16988'] and i.raw['fields']['customfield_16988']['value']:
+            return i.raw['fields']['customfield_16988']['value']
+        else:
+            return noneStr
+    elif field == "Platform Upgrade restrictions":
+        if i.raw['fields']['customfield_25905'] and i.raw['fields']['customfield_25905']['value']:
+            return i.raw['fields']['customfield_25905']['value']
+        else:
+            return noneStr
+    elif field == "Platform Upgrade exception models":
+        if i.raw['fields']['customfield_25910']:
+            return i.raw['fields']['customfield_25910']
+        else:
+            return noneStr
+    elif field == "HW restrictions":
+        if i.raw['fields']['customfield_25912']:
+            return i.raw['fields']['customfield_25912']
+        else:
+            return noneStr
+    elif field == "etc restrictions":
+        if i.raw['fields']['customfield_25913']:
+            return i.raw['fields']['customfield_25913']
+        else:
+            return noneStr
+    elif field == "Data Migration":
+        if i.raw['fields']['customfield_25914']:
+            return i.raw['fields']['customfield_25914']
+        else:
+            return noneStr
+    elif field == "worklogs":
+        return i.fields.worklog.worklogs    # [{raw: {"started": 'YYYY-MM-DDT00:00:00.0o000', "author": "xxxx", "timeSpent": "1d", "comment": "~~~~"}}, {...}]
 
-def getStatusColor(i):
-    if getField(i, "Status Color").upper() == "GREEN":
+def getFieldColor(i, field):
+    fieldValue = getField(i, field)
+    if fieldValue == "Green":
         return "🟩"
-    elif getField(i, "Status Color").upper() == "YELLOW":
+    elif fieldValue == "Yellow":
         return "🟨"
-    elif getField(i, "Status Color").upper() == "RED":
+    elif fieldValue == "Red":
         return "🟥"
     else:
-        return ""
+        return fieldValue
 
 def isOpenStatus(i):
     return getField(i, "Status").upper() in ["DRAFTING", "SCOPING", "OPEN"]
@@ -219,18 +327,18 @@ def getIssueByKey(jira, key, retry=0):
         e
         key
         if retry<5:
-            sleep(1)
+            sleep(0.3)
             getIssueByKey(jira, key, retry+1)
     return result
 
-def getIssuesByJql(jira, jql, retry=0):
+def getIssuesByJql(jira, jql, retry=0, fields=None):
     try:
-        result = jira.search_issues(jql, maxResults=1000)
+        result = jira.search_issues(jql, maxResults=1000, fields=fields)
         sleep(0.1)
     except JIRAError as e:
         e
-        if retry<5:
-            sleep(1)
+        if retry<10:
+            sleep(0.3)
             getIssuesByJql(jira, jql, retry+1)
     return result
         
@@ -239,6 +347,11 @@ def getMilestonesByDemoepic(jira, issue_key):
 
 def getStoriesByEpicIssue(jira, issue_key):
     return getIssuesByJql(jira, 'project=TVPLAT and "Epic Link" ='+issue_key)
+
+def getWorkLogsByEpics(jira, epics, startDate='2025-05-19', endDate='2025-05-30'):
+    jql = 'project=TVPLAT and "Epic Link" in '+ epics +' and workLogDate>='+startDate+" and workLogDate<="+endDate
+    print("[getWorkLog] get issues jql: "+jql)
+    return getIssuesByJql(jira, jql, fields=["id", "key", "summary", "description", "worklog"])
 
 def isIssueIncludeComp(issue, comp):
     for c in issue.fields.components:
@@ -298,30 +411,6 @@ def getFieldAssigneeStr(i, without_id = True):
             result = str(i.fields.assignee)
     return result        
 
-def getFieldCategorizationParams(i):
-    categorization = getField(i, "Categorization")
-    if categorization == "Product":
-        color = "green"
-    elif categorization in ["Productivity", "PoC"]:
-        color = "blue"
-    else:
-        color = "grey"
-    return {"label": categorization, "color": color}
-    
-def getFieldStatusToBadgeParams(i):
-    status = i.fields.status.name
-    statusLower = status.lower()
-    if statusLower in ["in progress", "implementation"]:
-        return {"label": status, "color": "orange"}
-    if statusLower in ["closed", "proposed to defer", "delivered", "deferred"]:
-        return {"label": status, "color": "grey"}
-    elif statusLower in ["approved", "ready", "resolved"]:
-        return {"label": status, "color": "green"}
-    # elif statusLower in ["open", "screen"]:
-    #     return {"label": status, "color": "grey"}
-    else:
-        return {"label": status, "color": "blue"}
-
 
 def isProductCategorization(i):
     return "Product" == getField(i, "Categorization")
@@ -338,12 +427,40 @@ def isStoryStatus(issue_story, check_status):
     # in progress
     return issue_status not in ["screen", "analysis", "verify", "closed"]
 
+def isNeedRefreshPageByOrg(data, session_state, objName):
+    if not (objName+'_refreshed' in session_state) or not (objName+'_part' in session_state) or not (objName+"_team" in session_state):
+        print("need refresh 11")
+        return True
 
+    if not 'jql' in data or not data['jql']:
+        print("need refresh 22")
+        return True
+
+    for part_name in data['jql']['part']:
+        if not part_name in session_state[objName+'_part']:
+            print("need refresh 33")
+            return True
+
+    for part_name in session_state[objName+'_part']:
+        if not part_name in data['jql']['part']:
+            print("need refresh 44")
+            return True
+    for team_name in data['jql']['team']:
+        if not team_name in session_state[objName+'_team']:
+            print("need refresh 555")
+            return True
+    for team_name in session_state[objName+'_team']:
+        if not team_name in data['jql']['team']:
+            print("need refresh 666")
+            return True
+    return False
 
 def test_jira(pwd):
     return JIRA({'server': 'http://hlm.lge.com/issue'}, basic_auth=("ybin.cho", pwd))
 
+def getAdminJira(acc_id, pwd):
+    return JIRA({'server': 'http://hlm.lge.com/issue'}, basic_auth=(acc_id, pwd))
 
 def test_issue(jira, key="TVPLAT-572091"):
-    return jira.issue(key)
+    return jira.issue("TVPLAT-"+key)
 

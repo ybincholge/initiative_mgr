@@ -2,7 +2,7 @@ from pymongo import MongoClient
 
 class DBUtil:
     def __init__(self, collection=None):
-        self.client = MongoClient("10.157.75.217", 27017)
+        self.client = MongoClient("10.157.75.222", 27017)
         self.db = self.client['iMgr']
         if collection:
             self.collection = self.db[collection]

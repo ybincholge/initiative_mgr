@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from utils.jira_utils import *
-from page.Sprint import SprintSetting
 from streamlit_tree_select import tree_select
 from streamlit_extras.grid import grid
 from streamlit_extras.row import row
@@ -47,13 +46,18 @@ class IManager:
         self.settings = st.sidebar.settings
         self.data['memberView'] = False
         self.isJiraUpdating = False
+        self.objName = 'IManager'
+
+        # self.data['jql']['sprint_start']
+        # self.data['jql']['sprint_end']
 
         # statistics
         self.initStatistics()
 
         if not self.data["account"] and st.session_state["account"]:
             self.data["account"] = st.session_state["account"]
-        if self.isNeedRefreshPage():
+
+        if isNeedRefreshPageByOrg(self.data, st.session_state, self.objName):
             self.initIssueDS()
             st.session_state['il'] = []    # initiative list
             st.session_state['ml'] = []    # milestone list (not demo epic)
@@ -62,7 +66,8 @@ class IManager:
             st.session_state['ded'] = {}    # demo epic dict {'initiaitve key': 'demo epic'}
             st.session_state['aed'] = {}    # arch epic dict {'initiative key': 'arch epic'}
             st.session_state['oed'] = {}    # other epics dict {'initiaitve key': ['epics']}
-            st.session_state['msd'] = {}   # story dict {'epic key': [story1, story2, milestone,  ...]}
+            st.session_state['msd'] = {}    # story dict {'epic key': [story1, story2, milestone,  ...]}
+            st.session_state['wld'] = {}    # worklog dict {'initiative key': [{"story": linktext, "worklogs":worklogs}}, ...]}
         else:
             self.il = st.session_state['il']
             self.ml = st.session_state['ml']
@@ -72,19 +77,9 @@ class IManager:
             self.aed = st.session_state['aed']
             self.oed = st.session_state['oed']
             self.msd = st.session_state['msd']
+            self.wld = st.session_state['wld']
 
-        st.title("Initiative Management")
-
-    def isNeedRefreshPage(self):
-        if not ('IManager_refreshed' in st.session_state) or not ('IManager_part' in st.session_state):
-            return True
-        for part_name in self.data['jql']['part']:
-            if part_name not in st.session_state['IManager_part']:
-                return True
-        for part_name in st.session_state['IManager_part']:
-            if part_name not in self.data['jql']['part']:
-                return True
-        return False
+        self.initIssues()
 
     def initStatistics(self):
         if 'progressSP_Total' in st.session_state:
@@ -147,7 +142,6 @@ class IManager:
         else:
             self.ng_ing_dict =  st.session_state['ng_ing_dict'] = {}
 
-
     def submitData(self):
         st.session_state['il'] = copy.deepcopy(self.il)
         st.session_state['ml'] = copy.deepcopy(self.ml)
@@ -157,8 +151,11 @@ class IManager:
         st.session_state['aed'] = copy.deepcopy(self.aed)
         st.session_state['oed'] = copy.deepcopy(self.oed)
         st.session_state['msd'] = copy.deepcopy(self.msd)
+        st.session_state['wld'] = copy.deepcopy(self.wld)
+        st.session_state['startDate'] = self.data['jql']['sprint_start']
 
-    def displayPage(self):
+
+    def initIssues(self):
         if not self.jira:
             return
         if not self.data['jql'] or (not self.data['jql']['part'] and not self.data['jql']['team']):
@@ -168,7 +165,7 @@ class IManager:
         if self.data["account"] and self.data["account"]["org"] and self.data["account"]["org"]["part"]:
             self.member_filter = True
 
-        if self.isNeedRefreshPage():
+        if isNeedRefreshPageByOrg(self.data, st.session_state, self.objName):
             self.isJiraUpdating = True
             result = self.getInitiativeEpicMilestones()
 
@@ -176,12 +173,12 @@ class IManager:
                 #     self.row_example()
 
             self.filterByIssueType(result)
-            st.session_state['IManager_refreshed'] = True
-            st.session_state['IManager_part'] = self.data['jql']['part']
+            st.session_state[self.objName +'_refreshed'] = True
+            st.session_state[self.objName+'_part'] = self.data['jql']['part']
+            st.session_state[self.objName+'_team'] = self.data['jql']['team']
+            st.session_state[self.objName+'_worklogadded'] = True
 
             self.isJiraUpdating = False
-
-        self.displayInitiativesTable()
 
     def addLabelsInGrid(self, grid, list_label):
         for i in list_label:
@@ -210,6 +207,22 @@ class IManager:
             self.msd[epic.key] = stories
         st.session_state['IManager_storyadded'] = True
 
+    def setWorkLogsByInitiatives(self, i):
+        self.wld[i] = []
+        if i in self.oed and self.oed[i]:
+            epics = self.oed[i]
+            if epics and len(epics)>0:
+                epicKeys = "("+ ",".join([epic.key for epic in epics]) +')'
+                print("[getWorkLogs] initiative: "+i+", epics_for_jql:"+epicKeys)
+                issues = getWorkLogsByEpics(self.jira, epicKeys, self.data['jql']['sprint_start'], self.data['jql']['sprint_end'])
+                self.wld[i] = []
+                for story in issues:
+                    wToken = {"story":"", "worklogs":[]}
+                    wToken["story"] = getLinkText(story, story.key)
+                    wToken["worklogs"] = story.fields.worklog.worklogs
+                    print("wToken "+str(wToken))
+                    self.wld[i].append(wToken)
+                print(i+": worklogs:"+str(self.wld[i]))
 
     def initIssueDS(self):
         # lists
@@ -221,8 +234,10 @@ class IManager:
         self.ded = {}    # demo epic dict {'initiaitve key': 'demo epic'}
         self.aed = {}    # arch epic dict {'initiative key': 'arch epic'}
         self.oed = {}    # other epics dict {'initiaitve key': ['epics']}
-        self.msd = {}   # story dict {'epic key': [story1, story2, milestone,  ...]}
+        self.msd = {}    # story dict {'epic key': [story1, story2, milestone,  ...]}
+        self.wld = {}    # worklog dict {'initiative key': [{"story": linktext, "worklogs":worklogs}}, ...]}
         st.session_state['IManager_storyadded'] = False
+        st.session_state['IManager_worklogadded'] = False
         return
 
     def filterByIssueType(self, result):
@@ -257,6 +272,7 @@ class IManager:
         self.ded[initiative_key] = None   # demo epic
         self.aed[initiative_key] = None   # arch review epic
         self.oed[initiative_key] = []     # other epics
+        self.wld[initiative_key] = {}
 
         for i_link in i_links:
             if not i_link or (not 'outwardIssue' in i_link) or (not i_link['outwardIssue']):
@@ -278,9 +294,16 @@ class IManager:
                             self.oed[initiative_key].append(e)
                             self.msd[e.key] = getChildIssues(e, self.sl, 'Story')
 
-    def displayInitiativesTable(self):
+        # set worklogs
+        if not 'IManager_worklogadded' in st.session_state or st.session_state['IManager_worklogadded'] == False \
+            or not 'startDate' in st.session_state or st.session_state['startDate'] != self.data['jql']['sprint_start']:
+            self.setWorkLogsByInitiatives(initiative_key)
+
+
+    def displayPage(self):
+        st.title("Initiative Management")
         st.subheader("Initiative List")
-        with st.expander("**Click**"):
+        with st.expander("**Click**", expanded=True):
             grid_structure = [[1.8, 8, 1.8, 1.5, 1.8, 2.5, 20] for i in range(len(st.session_state['il'])+1)]
             i_grid = grid(*grid_structure, vertical_align="top")
 
@@ -288,7 +311,7 @@ class IManager:
             self.addLabelsInGrid(i_grid, ["Category", "Summary", "Status", "Assignee", "Due Date"])
             options_p = ["SP", "Milestones"]
             self.progress_chk = i_grid.radio("**Progress rate**", options_p)
-            options = ["Status Color & Summary", "Demo & Milestone", "Arch Review", cNORMAL_EPIC]
+            options = ["Status Color & Summary", cWORKLOG_EPIC, "Demo & Milestone", "Arch Review", cNORMAL_EPIC]
             self.epic_chk = i_grid.radio("**Filter Type**", options, horizontal = True)
             if (not ("IManager_storyadded" in st.session_state) or st.session_state['IManager_storyadded'] == False) and self.epic_chk == cNORMAL_EPIC:
                 print("SET story "+str(st.session_state['IManager_storyadded'])+", "+self.epic_chk)
@@ -296,6 +319,13 @@ class IManager:
                 pass
             else:
                 print("NOT set story "+str(st.session_state['IManager_storyadded'])+", "+self.epic_chk)
+            if not 'IManager_worklogadded' in st.session_state or st.session_state['IManager_worklogadded'] == False \
+                or not 'startDate' in st.session_state or st.session_state['startDate'] != self.data['jql']['sprint_start']:
+                for i in st.session_state['il']:
+                    self.setWorkLogsByInitiatives(i.key)
+                st.session_state['wld'] = copy.deepcopy(self.wld)
+                if self.data and 'jql' in self.data and self.data['jql'] and 'sprint_start' in self.data['jql'] and self.data['jql']['sprint_start']:
+                    st.session_state['startDate'] = self.data['jql']['sprint_start']
 
             # initiative table
             self.progressSP_Total = 0
@@ -333,8 +363,40 @@ class IManager:
                 self.checkInitiative(i, i_grid, self.epic_chk == "Check result")
 
                 if self.epic_chk == 'Status Color & Summary':
-                    with i_grid.expander(getStatusColor(i)+" Status Summary"):
+                    with i_grid.expander(getFieldColor(i, "Status Color")+" Status Summary"):
                         st.text(getField(i, "Status Summary"))
+                elif self.epic_chk == cWORKLOG_EPIC:            # worklog
+                    # wld: worklog dict {'initiative key': [{"story": linktext, "worklogs":worklogs}}, ...]}
+                    if i.key in st.session_state['wld'] and st.session_state['wld'][i.key]:
+                        result = []
+                        startDate = self.data['jql']['sprint_start']
+                        endDate = self.data['jql']['sprint_end']
+                        # to_date = dt.strptime(endDate, '%Y-%m-%d') + datetime.timedelta(days=2) # +2 days to include 주말특근
+                        # endDate = to_date.strftime('%Y-%m-%d')
+                        for s in st.session_state['wld'][i.key]:
+                            data = sorted(s['worklogs'], key=lambda w: w.raw['started'])
+                            for worklog in data:
+                                w = worklog.raw
+                                if startDate <= w['started'].split("T")[0] <=endDate:
+                                    date = w['started'].split("T")[0]
+                                    time = w['started'].split('T')[1].split(".")[0][:-3]
+                                    result.append(s['story'])
+                                    result.append(w['author']['displayName'].split(" ")[0])
+                                    result.append(date+" "+time)
+                                    result.append(w["timeSpent"])
+                                    result.append("<p>"+"</p><p>".join(w["comment"].split("\r\n"))+"</p>")
+                        if len(result)/5 > 0:
+                            size = int(len(result)/5)
+                            with i_grid.expander("workLogs {size}".format(size=size)):
+                                w_struct = [[1.5, 1, 1, 1, 9] for i in range(size)] # key, author, start, duration, comment
+                                w_grid = grid(*w_struct, vertical_align="top")
+                                self.addLabelsInGrid(w_grid, ["Story", "Author", "Started", "T.spent", "Comment"])
+                                for r in result:
+                                    w_grid.markdown(r, unsafe_allow_html = True)
+                        else:
+                            i_grid.markdown("No worklog in "+self.data['jql']['sprint']['name'])
+                    else:
+                        i_grid.markdown("No worklog in "+self.data['jql']['sprint']['name'])
                 else:
                     if self.epic_chk != cNORMAL_EPIC and epic and epic.key:
                         stories = st.session_state['msd'][epic.key]
@@ -404,7 +466,7 @@ class IManager:
                                     e_grid.markdown(getFieldAssigneeStr(epic))
                                     e_grid.markdown(getFieldDuedate(epic))
                                     with e_grid.popover("Click"):
-                                        ed_struct = [[2, 10] for i in range(3)]
+                                        ed_struct = [[1, 5] for i in range(3)]
                                         ed_grid = grid(*ed_struct, vertical_align='top')
                                         ed_grid.markdown("Sprint")
                                         ed_grid.markdown(getField(epic, "Sprint"), unsafe_allow_html = True)
@@ -416,12 +478,24 @@ class IManager:
                                     with c2:
                                         if n_stories > 0:
                                             with st.expander("  Story: {numStories}".format(numStories=n_stories)):
-                                                r_s = row([7, 1.5, 1, 1.5])
+                                                rs_struct = [[6, 1.5, 1.3, 1.7, 7] for i in range(len(stories)+1)]
+                                                rs_grid = grid(*rs_struct, vertical_align='top')
+                                                # r_s = row([7, 1, 1, 1, 7])
+                                                self.addLabelsInGrid(rs_grid, ["Summary", "Status", "Assignee", "Due Date", "Detail"])
                                                 for story in stories:
-                                                    r_s.markdown(getFieldSummary(story))
-                                                    r_s.badge(**getFieldStatusToBadgeParams(story))
-                                                    r_s.markdown(getFieldAssigneeStr(story))
-                                                    r_s.markdown(getFieldDuedate(story))
+                                                    rs_grid.markdown(getFieldSummary(story))
+                                                    rs_grid.badge(**getFieldStatusToBadgeParams(story))
+                                                    rs_grid.markdown(getFieldAssigneeStr(story))
+                                                    rs_grid.markdown(getFieldDuedate(story))
+                                                    with rs_grid.popover("Click", use_container_width = True):
+                                                        sd_struct = [[2, 9] for i in range(3)]
+                                                        sd_grid = grid(*sd_struct, vertical_align='top')
+                                                        sd_grid.markdown("Sprint")
+                                                        sd_grid.markdown(getField(story, "Sprint"), unsafe_allow_html = True)
+                                                        sd_grid.markdown("DoD")
+                                                        sd_grid.markdown(getField(story, "DoD"))
+                                                        sd_grid.markdown("Description")
+                                                        sd_grid.markdown(getField(story, "Description"), unsafe_allow_html = True)
                                         else:
                                             st.markdown("  No stories exist ")
 
@@ -563,7 +637,6 @@ class IManager:
 
         return isNG, prefixNGDetails+(", ".join(ngDetails))
 
-
     def checkEssentialFieldForPOandELT(self, i):
         # TODO
         # 본문 parsing 및 조건 추가 고려, webOS Review Field 추가 고려
@@ -588,7 +661,7 @@ class IManager:
             "Controllability Risk": getField(i, "Controllability Risk"),
             "Estimated Effort": getField(i, "Estimated Effort"),
             "SRS작성필요여부": getField(i, "SRS"),
-            "Development Scope": getField(i, "SRS"),
+            "Development Scope": getField(i, "Development Scope"),
         }
 
         poNgExist, eltNgExist = False , False
@@ -638,7 +711,7 @@ class IManager:
         # c1, c2= st.columns([1, 0.1])
         # with c1:
         st.subheader("Overall Progress")
-        with st.expander("**Click**"):
+        with st.expander("**Click**", expanded=True):
             c11, c112, c12 = st.columns([1, 0.1, 1])
             with c11:
                 remain = st.session_state['progressSP_Total'] - st.session_state['progressSP_Done']
@@ -659,10 +732,9 @@ class IManager:
 
                 # "Done": [st.session_state['progressSP_Done']],
                 # "Remain": [st.session_state['progressSP_Total'] - st.session_state['progressSP_Done']]
-
         st.markdown("")
         st.subheader("Check rules")
-        with st.expander("**Click**"):
+        with st.expander("**Click**", expanded=True):
             c11, c12, c13 = st.columns([1, 1, 1])
             n_pass_all = self.checkPassRate_Total - self.checkPassRate_NG
             n_pass_review = self.n_review_total - self.n_ng_review
@@ -780,7 +852,6 @@ class IManager:
             grid.progress(m if m<100 else 100, "{p}% ({r}/{t})".format(r = resolved_ms, t = n_milestones, p = m))
 
 
-
     def example(self):
         random_df = pd.DataFrame(np.random.randn(20, 3), columns=["a", "b", "c"])
 
@@ -813,9 +884,7 @@ class IManager:
         row1 = row(2, vertical_align="center")
         row1.dataframe(random_df, use_container_width=True)
         row1.line_chart(random_df, use_container_width=True)
-
         row2 = row([2, 4, 1], vertical_align="bottom")
-
         row2.selectbox("Select Country", ["Germany", "Italy", "Japan", "USA"])
         row2.text_input("Your name")
         row2.button("Send", use_container_width=True)      
@@ -823,7 +892,6 @@ class IManager:
 
 im = IManager()
 im.displayPage()
-
 
 # st.title("🐙 Streamlit-tree-select")
 # st.subheader("A simple and elegant checkbox tree for Streamlit.")

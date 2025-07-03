@@ -137,20 +137,6 @@ class JiraHandler:
             return i.fields.assignee.displayName.split(" ")[0]
         return i.fields.assignee.displayName
 
-    def getFieldStatusToBadgeParams(self, i):
-        status = i.fields.status.name
-        statusLower = status.lower()
-        if statusLower in ["in progress"]:
-            return {"label": status, "color": "orange"}
-        if statusLower in ["closed", "proposed to defer", "delivered", "deferred"]:
-            return {"label": status, "color": "grey"}
-        elif statusLower in ["approved", "ready", "resolved"]:
-            return {"label": status, "color": "green"}
-        # elif statusLower in ["open", "screen"]:
-        #     return {"label": status, "color": "blue"}
-        else:
-            return {"label": status, "color": "blue"}
-
     def getFieldDuedate(self, i):
         return i.fields.duedate
 
