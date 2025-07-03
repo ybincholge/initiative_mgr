@@ -1,0 +1,17 @@
+[server]
+port = 8501
+enableStaticServing = false
+runOnSave = true
+
+[browser]
+serverAddress = "10.157.75.217"
+serverPort = 8501
+
+[client]
+showErrorDetails = true
+
+[theme]
+
+# The preset Streamlit theme that your custom theme inherits from.
+# This can be one of the following: "light" or "dark".
+base = "dark"
